@@ -1,25 +1,10 @@
-import { readdirSync, readFileSync, statSync } from "node:fs"
-import { extname, join } from "node:path"
+import { readFileSync } from "node:fs"
+
+import { collectTypeScriptFiles } from "./collect-typescript-files.ts"
 
 const warningLineCount = 200
 const maximumLineCount = 250
 const defaultPaths = ["scripts", "src", "tests"]
-
-function collectTypeScriptFiles(path: string): readonly string[] {
-  if (statSync(path).isFile()) {
-    return extname(path) === ".ts" ? [path] : []
-  }
-
-  return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
-    const entryPath = join(path, entry.name)
-
-    return entry.isDirectory()
-      ? collectTypeScriptFiles(entryPath)
-      : extname(entryPath) === ".ts"
-        ? [entryPath]
-        : []
-  })
-}
 
 function countSourceLines(filePath: string): number {
   return readFileSync(filePath, "utf8")
