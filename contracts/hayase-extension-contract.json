@@ -1,0 +1,61 @@
+{
+  "upstreamSha": "56151c710a9265f42994bd72cff007598c596bab",
+  "manifestVersion": 2,
+  "manifest": {
+    "requiredKeys": [
+      "accuracy",
+      "code",
+      "deprecated",
+      "description",
+      "icon",
+      "id",
+      "languages",
+      "manifestVersion",
+      "media",
+      "name",
+      "type",
+      "update",
+      "version"
+    ],
+    "sourceTypes": ["torrent"],
+    "accuracyLiterals": ["high", "low", "medium"],
+    "mediaLiterals": ["both", "dub", "sub"]
+  },
+  "animeQuery": {
+    "requiredFields": ["anilistId", "episode", "exclusions", "media", "resolution", "titles"],
+    "optionalFields": [
+      "absoluteEpisodeNumber",
+      "anidbAid",
+      "anidbEid",
+      "episodeCount",
+      "imdbId",
+      "tmdbId",
+      "tvdbEId",
+      "tvdbId"
+    ],
+    "resolutionLiterals": ["", "1080", "2160", "480", "540", "720"],
+    "mediaBoundary": "opaque",
+    "injectedFetch": true
+  },
+  "torrentResult": {
+    "requiredFields": [
+      "accuracy",
+      "date",
+      "downloads",
+      "hash",
+      "leechers",
+      "link",
+      "seeders",
+      "size",
+      "title"
+    ],
+    "optionalFields": ["id", "type"],
+    "typeLiterals": ["alt", "batch", "best"]
+  },
+  "torrentSource": {
+    "test": "():Promise<boolean>",
+    "single": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?):Promise<TorrentResult[]>",
+    "batch": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?):Promise<TorrentResult[]>",
+    "movie": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?):Promise<TorrentResult[]>"
+  }
+}
