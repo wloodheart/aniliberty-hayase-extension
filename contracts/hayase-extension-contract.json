@@ -2,60 +2,71 @@
   "upstreamSha": "56151c710a9265f42994bd72cff007598c596bab",
   "manifestVersion": 2,
   "manifest": {
-    "requiredKeys": [
-      "accuracy",
-      "code",
-      "deprecated",
-      "description",
-      "icon",
-      "id",
-      "languages",
-      "manifestVersion",
-      "media",
-      "name",
-      "type",
-      "update",
-      "version"
-    ],
-    "sourceTypes": ["torrent"],
-    "accuracyLiterals": ["high", "low", "medium"],
-    "mediaLiterals": ["both", "dub", "sub"]
+    "accuracy": { "optional": false, "type": "\"high\"|\"low\"|\"medium\"" },
+    "code": { "optional": false, "type": "string" },
+    "deprecated": { "optional": false, "type": "boolean" },
+    "description": { "optional": false, "type": "string" },
+    "icon": { "optional": false, "type": "string" },
+    "id": { "optional": false, "type": "string" },
+    "languages": { "optional": false, "type": "CountryCodes[]" },
+    "manifestVersion": { "optional": false, "type": "number" },
+    "media": { "optional": false, "type": "\"both\"|\"dub\"|\"sub\"" },
+    "name": { "optional": false, "type": "string" },
+    "options": {
+      "optional": true,
+      "type": "Record<string,{default:unknown;description:string;type:\"boolean\"|\"number\"|\"select\"|\"string\";values?:unknown[]}>"
+    },
+    "rateLimit": { "optional": true, "type": "number" },
+    "ratio": { "optional": true, "type": "\"perma\"|number" },
+    "type": { "optional": false, "type": "\"http\"|\"nzb\"|\"subtitle\"|\"torrent\"" },
+    "update": { "optional": true, "type": "string" },
+    "updatePeers": { "optional": true, "type": "false" },
+    "url": { "optional": true, "type": "string" },
+    "version": { "optional": false, "type": "string" }
   },
   "animeQuery": {
-    "requiredFields": ["anilistId", "episode", "exclusions", "media", "resolution", "titles"],
-    "optionalFields": [
-      "absoluteEpisodeNumber",
-      "anidbAid",
-      "anidbEid",
-      "episodeCount",
-      "imdbId",
-      "tmdbId",
-      "tvdbEId",
-      "tvdbId"
-    ],
-    "resolutionLiterals": ["", "1080", "2160", "480", "540", "720"],
-    "mediaBoundary": "opaque",
-    "injectedFetch": true
+    "absoluteEpisodeNumber": { "optional": true, "type": "number" },
+    "anidbAid": { "optional": true, "type": "number" },
+    "anidbEid": { "optional": true, "type": "number" },
+    "anilistId": { "optional": false, "type": "number" },
+    "episode": { "optional": false, "type": "number" },
+    "episodeCount": { "optional": true, "type": "number" },
+    "exclusions": { "optional": false, "type": "string[]" },
+    "fetch": { "optional": false, "type": "typeof fetch" },
+    "imdbId": { "optional": true, "type": "string" },
+    "media": { "optional": false, "type": "unknown" },
+    "resolution": { "optional": false, "type": "\"\"|\"1080\"|\"2160\"|\"480\"|\"540\"|\"720\"" },
+    "titles": { "optional": false, "type": "string[]" },
+    "tmdbId": { "optional": true, "type": "string" },
+    "tvdbEId": { "optional": true, "type": "number" },
+    "tvdbId": { "optional": true, "type": "number" }
   },
   "torrentResult": {
-    "requiredFields": [
-      "accuracy",
-      "date",
-      "downloads",
-      "hash",
-      "leechers",
-      "link",
-      "seeders",
-      "size",
-      "title"
-    ],
-    "optionalFields": ["id", "type"],
-    "typeLiterals": ["alt", "batch", "best"]
+    "accuracy": { "optional": false, "type": "\"high\"|\"low\"|\"medium\"" },
+    "date": { "optional": false, "type": "Date" },
+    "downloads": { "optional": false, "type": "number" },
+    "hash": { "optional": false, "type": "string" },
+    "id": { "optional": true, "type": "number" },
+    "leechers": { "optional": false, "type": "number" },
+    "link": { "optional": false, "type": "string" },
+    "seeders": { "optional": false, "type": "number" },
+    "size": { "optional": false, "type": "number" },
+    "title": { "optional": false, "type": "string" },
+    "type": { "optional": true, "type": "\"alt\"|\"batch\"|\"best\"" }
   },
   "torrentSource": {
-    "test": "():Promise<boolean>",
-    "single": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?):Promise<TorrentResult[]>",
-    "batch": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?):Promise<TorrentResult[]>",
-    "movie": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?):Promise<TorrentResult[]>"
+    "batch": {
+      "optional": false,
+      "type": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?)->Promise<TorrentResult[]>"
+    },
+    "movie": {
+      "optional": false,
+      "type": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?)->Promise<TorrentResult[]>"
+    },
+    "single": {
+      "optional": false,
+      "type": "(AnimeQueryWithFetch,Record<string,boolean|number|string>?)->Promise<TorrentResult[]>"
+    },
+    "test": { "optional": false, "type": "()->Promise<boolean>" }
   }
 }

@@ -7,41 +7,26 @@ import { z } from "zod"
 import {
   ContractInputError,
   ContractSyntaxError,
-  compareHayaseContracts,
   parseHayaseContract,
 } from "./hayase-contract-ast.ts"
+import { compareHayaseContracts } from "./hayase-contract-model.ts"
 
 const upstreamSha = "56151c710a9265f42994bd72cff007598c596bab"
 const upstreamUrl = `https://raw.githubusercontent.com/hayase-app/interface/${upstreamSha}/src/lib/modules/extensions/types.d.ts`
 const maximumSourceBytes = 256 * 1024
+const propertySchema = z.object({
+  optional: z.boolean(),
+  type: z.string(),
+})
+const propertiesSchema = z.record(z.string(), propertySchema)
 
 const contractSchema = z.object({
   upstreamSha: z.literal(upstreamSha),
   manifestVersion: z.literal(2),
-  manifest: z.object({
-    requiredKeys: z.array(z.string()),
-    sourceTypes: z.array(z.string()),
-    accuracyLiterals: z.array(z.string()),
-    mediaLiterals: z.array(z.string()),
-  }),
-  animeQuery: z.object({
-    requiredFields: z.array(z.string()),
-    optionalFields: z.array(z.string()),
-    resolutionLiterals: z.array(z.string()),
-    mediaBoundary: z.string(),
-    injectedFetch: z.boolean(),
-  }),
-  torrentResult: z.object({
-    requiredFields: z.array(z.string()),
-    optionalFields: z.array(z.string()),
-    typeLiterals: z.array(z.string()),
-  }),
-  torrentSource: z.object({
-    test: z.string(),
-    single: z.string(),
-    batch: z.string(),
-    movie: z.string(),
-  }),
+  manifest: propertiesSchema,
+  animeQuery: propertiesSchema,
+  torrentResult: propertiesSchema,
+  torrentSource: propertiesSchema,
 })
 
 class ContractNetworkError extends Error {

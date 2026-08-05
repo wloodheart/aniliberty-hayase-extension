@@ -46,11 +46,16 @@ export interface TorrentResult {
 }
 
 export interface ExtensionConfig {
+  rateLimit?: number
+  updatePeers?: false
+  options?: SearchOptions
   code: string
   update?: string
-  languages: string[]
+  languages: CountryCodes[]
+  url?: string
   media: "both" | "dub" | "sub"
   icon: string
+  ratio?: number | "perma"
   accuracy: Accuracy
   type: "http" | "subtitle" | "torrent" | "nzb"
   id: string
@@ -62,3 +67,13 @@ export interface ExtensionConfig {
 }
 
 export type Accuracy = "low" | "high" | "medium"
+type CountryCodes = string
+export type SearchOptions = Record<
+  string,
+  {
+    default: unknown
+    values?: unknown[]
+    description: string
+    type: "select" | "boolean" | "number" | "string"
+  }
+>

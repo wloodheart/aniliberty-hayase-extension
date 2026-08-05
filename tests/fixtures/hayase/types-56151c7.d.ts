@@ -1,4 +1,15 @@
 export type Accuracy = "high" | "medium" | "low"
+type CountryCodes = string
+
+export type SearchOptions = Record<
+  string,
+  {
+    type: "string" | "number" | "boolean" | "select"
+    description: string
+    values?: unknown[]
+    default: unknown
+  }
+>
 
 export interface ExtensionConfig {
   manifestVersion: number
@@ -9,11 +20,16 @@ export interface ExtensionConfig {
   id: string
   type: "torrent" | "nzb" | "subtitle" | "http"
   accuracy: Accuracy
+  ratio?: "perma" | number
   icon: string
   media: "sub" | "dub" | "both"
-  languages: string[]
+  url?: string
+  languages: CountryCodes[]
   update?: string
   code: string
+  options?: SearchOptions
+  updatePeers?: false
+  rateLimit?: number
 }
 
 export interface TorrentResult {
