@@ -11,7 +11,46 @@ import type {
   TorrentSource as PinnedTorrentSource,
 } from "../fixtures/hayase/types-56151c7.d.ts"
 
+const invalidLanguageFixture = "tests/fixtures/hayase/invalid-language.fixture.ts"
+
 type IsAssignable<From, To> = [From] extends [To] ? true : false
+
+type TypecheckRun = {
+  readonly exitCode: number
+  readonly output: string
+}
+
+async function runTypeFixture(fixture: string): Promise<TypecheckRun> {
+  const process = Bun.spawn(
+    [
+      "bun",
+      "x",
+      "tsc",
+      "--noEmit",
+      "--ignoreConfig",
+      "--strict",
+      "--skipLibCheck",
+      "--module",
+      "ESNext",
+      "--moduleResolution",
+      "bundler",
+      "--target",
+      "ESNext",
+      "--lib",
+      "ES2024,WebWorker",
+      "--types",
+      "bun",
+      "--allowImportingTsExtensions",
+      fixture,
+    ],
+    { stderr: "pipe", stdout: "pipe" },
+  )
+
+  return {
+    exitCode: await process.exited,
+    output: `${await new Response(process.stdout).text()}${await new Response(process.stderr).text()}`,
+  }
+}
 
 const localManifestTypeIsPinnedCompatible: IsAssignable<HayaseManifestV2, PinnedExtensionConfig> =
   true
@@ -30,7 +69,7 @@ const manifest = {
   icon: "https://example.com/icon.png",
   media: "both",
   url: "aHR0cHM6Ly9leGFtcGxlLmNvbQ==",
-  languages: ["ALL"],
+  languages: ["RU"],
   code: "gh:example/contract-source/dist/index",
   options: {
     quality: {
@@ -98,4 +137,14 @@ test("assigns local sources to the pinned runtime contract with mutable arrays",
   expect(Object.keys(source).toSorted()).toEqual(["batch", "movie", "single", "test"])
   expect(results).toHaveLength(2)
   expect(localSourceTypeIsPinnedCompatible).toBe(true)
+})
+
+test("rejects invalid manifest language literals at compile time", async () => {
+  // Given: a fixture containing an unsupported manifest language literal
+  // When: TypeScript compiles the fixture against the local contract
+  const result = await runTypeFixture(invalidLanguageFixture)
+
+  // Then: compilation fails specifically on the language union
+  expect(result.exitCode).toBe(1)
+  expect(result.output).toContain("Type '\"INVALID\"' is not assignable to type '\"RU\"'")
 })

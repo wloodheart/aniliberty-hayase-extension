@@ -1,5 +1,5 @@
 export type Accuracy = "high" | "medium" | "low"
-type CountryCodes = string
+type CountryCodes = "ALL" | "RU"
 
 export type SearchOptions = Record<
   string,

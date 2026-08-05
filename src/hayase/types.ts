@@ -1,6 +1,7 @@
 export const HAYASE_MANIFEST_VERSION = 2 as const
 
 export type Accuracy = "high" | "medium" | "low"
+export type SupportedLanguage = "RU"
 export type ExtensionMedia = "sub" | "dub" | "both"
 export type Resolution = "2160" | "1080" | "720" | "540" | "480" | ""
 export type TorrentResultType = "batch" | "best" | "alt"
@@ -29,7 +30,7 @@ export type HayaseManifestV2 = {
   readonly icon: string
   readonly media: ExtensionMedia
   readonly url?: string
-  readonly languages: string[]
+  readonly languages: SupportedLanguage[]
   readonly update?: string
   readonly code: string
   readonly options?: SearchOptions
