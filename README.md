@@ -21,9 +21,11 @@ Releases publish a generated manifest named `index.json` to GitHub Pages. Its st
 
 `https://<owner>.github.io/<repository>/index.json`
 
-Use the owner and repository shown by the repository that published the release. This local source tree has no
-configured public owner, so it can't provide a live install URL. Release generation derives the coordinates from
-`GITHUB_REPOSITORY`, not from a branch or a hard-coded example.
+The current stable manifest URL is:
+
+`https://wloodheart.github.io/aniliberty-hayase-extension/index.json`
+
+Release generation derives the coordinates from `GITHUB_REPOSITORY`, not from a branch or a hard-coded example.
 
 In Hayase:
 
