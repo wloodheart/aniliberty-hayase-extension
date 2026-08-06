@@ -1,3 +1,3 @@
-const extensionEntrypoint = Object.freeze({})
+import { HayaseTorrentSource } from "./hayase/adapter.ts"
 
-export default extensionEntrypoint
+export default new HayaseTorrentSource()
