@@ -1,0 +1,254 @@
+{
+  "components": {
+    "schemas": {
+      "AppStatus": {
+        "properties": {
+          "available_api_endpoints": {
+            "items": {
+              "format": "uri",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "is_alive": {
+            "type": "boolean"
+          }
+        },
+        "required": ["available_api_endpoints", "is_alive"],
+        "type": "object"
+      },
+      "ReleaseName": {
+        "properties": {
+          "alternative": {
+            "nullable": true,
+            "type": "string"
+          },
+          "english": {
+            "type": "string"
+          },
+          "main": {
+            "type": "string"
+          }
+        },
+        "required": ["alternative", "english", "main"],
+        "type": "object"
+      },
+      "ReleaseSeason": {
+        "properties": {
+          "value": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": ["value"],
+        "type": "object"
+      },
+      "ReleaseType": {
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": ["value"],
+        "type": "object"
+      },
+      "SearchRelease": {
+        "properties": {
+          "episodes_total": {
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer"
+          },
+          "id": {
+            "brand": "ReleaseId",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "is_blocked_by_copyrights": {
+            "type": "boolean"
+          },
+          "is_blocked_by_geo": {
+            "type": "boolean"
+          },
+          "name": {
+            "$ref": "ReleaseName"
+          },
+          "season": {
+            "$ref": "ReleaseSeason"
+          },
+          "type": {
+            "$ref": "ReleaseType"
+          },
+          "year": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "episodes_total",
+          "id",
+          "is_blocked_by_copyrights",
+          "is_blocked_by_geo",
+          "name",
+          "season",
+          "type",
+          "year"
+        ],
+        "type": "object"
+      },
+      "SearchReleases": {
+        "items": {
+          "$ref": "SearchRelease"
+        },
+        "type": "array"
+      },
+      "Torrent": {
+        "properties": {
+          "bitrate": {
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer"
+          },
+          "codec": {
+            "$ref": "TorrentCodec"
+          },
+          "completed_times": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "hash": {
+            "brand": "InfoHash",
+            "pattern": "hex:40|64",
+            "type": "string"
+          },
+          "id": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "is_hardsub": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "leechers": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "magnet": {
+            "format": "magnet-uri",
+            "type": "string"
+          },
+          "quality": {
+            "$ref": "TorrentQuality"
+          },
+          "seeders": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "size": {
+            "minimum": 1,
+            "type": "integer",
+            "unit": "bytes"
+          },
+          "type": {
+            "$ref": "TorrentSource"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bitrate",
+          "codec",
+          "completed_times",
+          "created_at",
+          "description",
+          "hash",
+          "id",
+          "is_hardsub",
+          "label",
+          "leechers",
+          "magnet",
+          "quality",
+          "seeders",
+          "size",
+          "type",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "TorrentCodec": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "label_color": {
+            "nullable": true,
+            "type": "string"
+          },
+          "label_is_visible": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": ["label", "label_color", "label_is_visible", "value"],
+        "type": "object"
+      },
+      "TorrentList": {
+        "items": {
+          "$ref": "Torrent"
+        },
+        "type": "array"
+      },
+      "TorrentQuality": {
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": ["value"],
+        "type": "object"
+      },
+      "TorrentSource": {
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": ["value"],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/anime/torrents/release/{releaseId}": {
+      "get": {
+        "response": "TorrentList"
+      }
+    },
+    "/app/search/releases": {
+      "get": {
+        "response": "SearchReleases"
+      }
+    },
+    "/app/status": {
+      "get": {
+        "response": "AppStatus"
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "request": {
+    "ip": "192.0.2.10",
+    "country": "Exampleland",
+    "iso_code": "EX",
+    "timezone": "Etc/UTC"
+  },
+  "is_alive": true,
+  "available_api_endpoints": ["https://aniliberty.top"]
+}

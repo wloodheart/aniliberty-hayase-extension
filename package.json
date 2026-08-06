@@ -15,6 +15,7 @@
     "check:size": "bun run scripts/check-size.ts",
     "check:no-excuse": "bun run scripts/check-no-excuses.ts",
     "contract:hayase": "bun run scripts/check-hayase-contract.ts",
+    "contract:aniliberty": "bun run scripts/check-aniliberty-contract.ts",
     "verify:bundle": "bun run scripts/verify-bundle.ts",
     "release:dry-run": "bun -e 'throw new Error(\"release:dry-run is unavailable until the release task\")'",
     "live:smoke": "bun -e 'throw new Error(\"live:smoke is unavailable until the live smoke task\")'",
