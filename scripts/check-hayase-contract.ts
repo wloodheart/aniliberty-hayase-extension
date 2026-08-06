@@ -3,7 +3,13 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { z } from "zod"
-
+import {
+  ContractEndpointDriftError,
+  ContractSkipError,
+  classifyContractStatus,
+  classifyNetworkFixture,
+  isTransportFailure,
+} from "./contract-network.ts"
 import {
   ContractInputError,
   ContractSyntaxError,
@@ -39,10 +45,11 @@ async function fetchSource(): Promise<string> {
     redirect: "error",
     signal: AbortSignal.timeout(10_000),
   })
-  if (!response.ok || response.body === null) {
+  if (response.status !== 200) {
     await response.body?.cancel()
-    throw new ContractNetworkError(`Hayase source request failed with status ${response.status}`)
+    classifyContractStatus(response.status)
   }
+  if (response.body === null) throw new ContractNetworkError("Hayase source response has no body")
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let byteCount = 0
@@ -62,10 +69,17 @@ async function fetchSource(): Promise<string> {
 
 async function main(): Promise<void> {
   const args = Bun.argv.slice(2).filter((argument) => argument !== "--")
-  const fixturePath = args.length === 2 && args[0] === "--fixture" ? args[1] : undefined
-  if (args.length !== 0 && fixturePath === undefined) {
-    throw new ContractInputError("Usage: check-hayase-contract.ts [--fixture <path>]")
+  const fixturePath = args[0] === "--fixture" ? args[1] : undefined
+  const networkFixturePath = args[0] === "--network-fixture" ? args[1] : undefined
+  if (
+    args.length !== 0 &&
+    (args.length !== 2 || (fixturePath === undefined && networkFixturePath === undefined))
+  ) {
+    throw new ContractInputError(
+      "Usage: check-hayase-contract.ts [--fixture <path> | --network-fixture <path>]",
+    )
   }
+  if (networkFixturePath !== undefined) classifyNetworkFixture(networkFixturePath)
   const expected = contractSchema.parse(
     JSON.parse(readFileSync("contracts/hayase-extension-contract.json", "utf8")),
   )
@@ -103,7 +117,12 @@ async function main(): Promise<void> {
 try {
   await main()
 } catch (error) {
-  if (error instanceof ContractSyntaxError) {
+  if (error instanceof ContractSkipError) {
+    console.log(error.token)
+  } else if (error instanceof ContractEndpointDriftError) {
+    console.error(error.token)
+    process.exitCode = 1
+  } else if (error instanceof ContractSyntaxError) {
     console.error(
       JSON.stringify({ compatible: false, diagnostics: error.diagnosticCount, source: "syntax" }),
     )
@@ -111,18 +130,8 @@ try {
   } else if (error instanceof ContractInputError || error instanceof ContractNetworkError) {
     console.error(JSON.stringify({ compatible: false, message: error.message, source: error.name }))
     process.exitCode = 1
-  } else if (
-    error instanceof TypeError ||
-    (error instanceof DOMException && ["AbortError", "TimeoutError"].includes(error.name))
-  ) {
-    console.error(
-      JSON.stringify({
-        compatible: false,
-        message: "Hayase source request failed",
-        source: "ContractNetworkError",
-      }),
-    )
-    process.exitCode = 1
+  } else if (isTransportFailure(error)) {
+    console.log("SKIP_ENV_NETWORK")
   } else {
     throw error
   }

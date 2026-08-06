@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { extractAniLibertyConsumedContract } from "./aniliberty-contract-extract.ts"
+
 const referenceSchema = z.strictObject({ $ref: z.string().min(1) })
 const scalarPropertySchema = z.strictObject({
   type: z.enum(["boolean", "integer", "number", "string"]),
@@ -117,6 +119,6 @@ function formatJson(value: JsonValue, depth: number): string {
 }
 
 export function normalizeAniLibertyContract(input: unknown): string {
-  const parsed = OpenApiConsumedSchema.parse(input)
+  const parsed = OpenApiConsumedSchema.parse(extractAniLibertyConsumedContract(input))
   return `${formatJson(canonicalize(z.json().parse(parsed)), 0)}\n`
 }

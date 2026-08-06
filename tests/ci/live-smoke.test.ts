@@ -54,3 +54,30 @@ test("emits FAIL_SCHEMA_DRIFT when a successful JSON body violates the schema", 
   // Then: confirmed response drift fails without exposing the body
   expect(result).toEqual({ exitCode: 1, stderr: "FAIL_SCHEMA_DRIFT\n", stdout: "" })
 })
+
+test("rejects unknown fixture fields before smoke classification", async () => {
+  // Given: an otherwise valid fixture with an unrecognized boundary field
+  // When: the smoke CLI parses the fixture
+  const result = await runSmoke("live-unknown-field.json")
+
+  // Then: the fixture itself is rejected instead of silently stripped
+  expect(result).toEqual({ exitCode: 1, stderr: "FAIL_FIXTURE_INVALID\n", stdout: "" })
+})
+
+test("rejects a JSON-looking media type with the wrong top-level type", async () => {
+  // Given: a valid body labeled with a substring lookalike media type
+  // When: the smoke CLI classifies the fixture
+  const result = await runSmoke("live-evil-content-type.json")
+
+  // Then: the successful body is confirmed schema drift rather than PASS
+  expect(result).toEqual({ exitCode: 1, stderr: "FAIL_SCHEMA_DRIFT\n", stdout: "" })
+})
+
+test("accepts case-insensitive JSON media type with a valid parameter", async () => {
+  // Given: a valid response using RFC media-type casing and a charset parameter
+  // When: the smoke CLI classifies the fixture
+  const result = await runSmoke("live-json-parameter.json")
+
+  // Then: the exact application/json media type remains valid
+  expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "PASS_API_OK\n" })
+})

@@ -1,0 +1,14 @@
+name: Continue on error
+on: pull_request
+permissions:
+  contents: read
+concurrency:
+  group: continue-on-error
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - continue-on-error: true
+        run: bun run check

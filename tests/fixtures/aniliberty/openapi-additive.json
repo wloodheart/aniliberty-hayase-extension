@@ -1,0 +1,134 @@
+{
+  "openapi": "3.0.0",
+  "info": { "version": "1.0.0" },
+  "paths": {
+    "/app/status": { "get": { "response": "AppStatus" } },
+    "/app/search/releases": { "get": { "response": "SearchReleases" } },
+    "/anime/torrents/release/{releaseId}": { "get": { "response": "TorrentList" } },
+    "/unconsumed/health": { "get": { "response": "UnconsumedHealth" } }
+  },
+  "components": {
+    "schemas": {
+      "AppStatus": {
+        "type": "object",
+        "required": ["is_alive", "available_api_endpoints"],
+        "properties": {
+          "is_alive": { "type": "boolean" },
+          "available_api_endpoints": {
+            "type": "array",
+            "items": { "type": "string", "format": "uri" }
+          },
+          "unconsumed_note": { "type": "string" }
+        }
+      },
+      "ReleaseName": {
+        "type": "object",
+        "required": ["main", "english", "alternative"],
+        "properties": {
+          "main": { "type": "string" },
+          "english": { "type": "string" },
+          "alternative": { "type": "string", "nullable": true }
+        }
+      },
+      "ReleaseType": {
+        "type": "object",
+        "required": ["value"],
+        "properties": { "value": { "type": "string" } }
+      },
+      "ReleaseSeason": {
+        "type": "object",
+        "required": ["value"],
+        "properties": { "value": { "type": "string", "nullable": true } }
+      },
+      "SearchRelease": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "year",
+          "name",
+          "season",
+          "episodes_total",
+          "is_blocked_by_geo",
+          "is_blocked_by_copyrights"
+        ],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1, "brand": "ReleaseId" },
+          "type": { "$ref": "ReleaseType" },
+          "year": { "type": "integer" },
+          "name": { "$ref": "ReleaseName" },
+          "season": { "$ref": "ReleaseSeason" },
+          "episodes_total": { "type": "integer", "minimum": 1, "nullable": true },
+          "is_blocked_by_geo": { "type": "boolean" },
+          "is_blocked_by_copyrights": { "type": "boolean" }
+        }
+      },
+      "SearchReleases": { "type": "array", "items": { "$ref": "SearchRelease" } },
+      "TorrentSource": {
+        "type": "object",
+        "required": ["value"],
+        "properties": { "value": { "type": "string" } }
+      },
+      "TorrentCodec": {
+        "type": "object",
+        "required": ["value", "label", "label_color", "label_is_visible"],
+        "properties": {
+          "value": { "type": "string" },
+          "label": { "type": "string" },
+          "label_color": { "type": "string", "nullable": true },
+          "label_is_visible": { "type": "boolean" }
+        }
+      },
+      "TorrentQuality": {
+        "type": "object",
+        "required": ["value"],
+        "properties": { "value": { "type": "string" } }
+      },
+      "Torrent": {
+        "type": "object",
+        "required": [
+          "id",
+          "hash",
+          "size",
+          "type",
+          "label",
+          "codec",
+          "quality",
+          "magnet",
+          "seeders",
+          "bitrate",
+          "leechers",
+          "created_at",
+          "updated_at",
+          "is_hardsub",
+          "description",
+          "completed_times"
+        ],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "hash": { "type": "string", "pattern": "hex:40|64", "brand": "InfoHash" },
+          "size": { "type": "integer", "minimum": 1, "unit": "bytes" },
+          "type": { "$ref": "TorrentSource" },
+          "label": { "type": "string" },
+          "codec": { "$ref": "TorrentCodec" },
+          "quality": { "$ref": "TorrentQuality" },
+          "magnet": { "type": "string", "format": "magnet-uri" },
+          "seeders": { "type": "integer", "minimum": 0 },
+          "bitrate": { "type": "integer", "minimum": 1, "nullable": true },
+          "leechers": { "type": "integer", "minimum": 0 },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "is_hardsub": { "type": "boolean" },
+          "description": { "type": "string" },
+          "completed_times": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "TorrentList": { "type": "array", "items": { "$ref": "Torrent" } },
+      "UnconsumedHealth": {
+        "type": "object",
+        "required": ["message"],
+        "properties": { "message": { "type": "string" } }
+      }
+    }
+  }
+}

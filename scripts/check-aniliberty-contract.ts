@@ -3,6 +3,14 @@ import { readFileSync } from "node:fs"
 import { z } from "zod"
 
 import { normalizeAniLibertyContract } from "./aniliberty-contract.ts"
+import {
+  ContractEndpointDriftError,
+  ContractSkipError,
+  classifyContractStatus,
+  classifyNetworkFixture,
+  isTransportFailure,
+} from "./contract-network.ts"
+import { isJsonMediaType } from "./http-media-type.ts"
 
 const defaultContractPath = "contracts/aniliberty-v1.contract.json"
 const upstreamUrl = "https://anilibria.top/storage/api/docs/v1?aniliberty-api-v1-docs.json"
@@ -26,13 +34,14 @@ async function fetchContract(): Promise<unknown> {
     redirect: "error",
     signal: AbortSignal.timeout(10_000),
   })
-  if (!response.ok || response.body === null) {
+  if (response.status !== 200) {
     await response.body?.cancel()
-    throw new ContractNetworkError(
-      `AniLiberty contract request failed with status ${response.status}`,
-    )
+    classifyContractStatus(response.status)
   }
-  if (!response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+  if (response.body === null) {
+    throw new ContractNetworkError("AniLiberty contract response has no body")
+  }
+  if (!isJsonMediaType(response.headers.get("content-type") ?? "")) {
     await response.body.cancel()
     throw new ContractNetworkError("AniLiberty contract response is not JSON")
   }
@@ -56,14 +65,25 @@ async function fetchContract(): Promise<unknown> {
 async function main(): Promise<void> {
   const args = Bun.argv.slice(2).filter((argument) => argument !== "--")
   const fixturePath = option(args, "--fixture")
+  const networkFixturePath = option(args, "--network-fixture")
   const contractPath = option(args, "--contract") ?? defaultContractPath
   const expectedLength =
-    fixturePath === undefined ? 0 : contractPath === defaultContractPath ? 2 : 4
-  if (args.length !== expectedLength) {
+    fixturePath !== undefined
+      ? contractPath === defaultContractPath
+        ? 2
+        : 4
+      : networkFixturePath !== undefined
+        ? 2
+        : 0
+  if (
+    args.length !== expectedLength ||
+    (fixturePath !== undefined && networkFixturePath !== undefined)
+  ) {
     throw new ContractInputError(
-      "Usage: check-aniliberty-contract.ts [--fixture <path> [--contract <path>]]",
+      "Usage: check-aniliberty-contract.ts [--fixture <path> [--contract <path>] | --network-fixture <path>]",
     )
   }
+  if (networkFixturePath !== undefined) classifyNetworkFixture(networkFixturePath)
 
   const actual = normalizeAniLibertyContract(
     fixturePath === undefined
@@ -82,7 +102,12 @@ async function main(): Promise<void> {
 try {
   await main()
 } catch (error) {
-  if (error instanceof z.ZodError) {
+  if (error instanceof ContractSkipError) {
+    console.log(error.token)
+  } else if (error instanceof ContractEndpointDriftError) {
+    console.error(error.token)
+    process.exitCode = 1
+  } else if (error instanceof z.ZodError) {
     console.error(
       JSON.stringify({
         compatible: false,
@@ -103,18 +128,8 @@ try {
       }),
     )
     process.exitCode = 1
-  } else if (
-    error instanceof TypeError ||
-    (error instanceof DOMException && ["AbortError", "TimeoutError"].includes(error.name))
-  ) {
-    console.error(
-      JSON.stringify({
-        compatible: false,
-        message: "AniLiberty contract request failed",
-        source: "ContractNetworkError",
-      }),
-    )
-    process.exitCode = 1
+  } else if (isTransportFailure(error)) {
+    console.log("SKIP_ENV_NETWORK")
   } else {
     throw error
   }

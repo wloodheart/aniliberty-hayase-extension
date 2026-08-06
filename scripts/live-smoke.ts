@@ -3,13 +3,14 @@ import { readFileSync } from "node:fs"
 import { z } from "zod"
 
 import { AppStatusSchema } from "../src/aniliberty/schemas.ts"
+import { isJsonMediaType } from "./http-media-type.ts"
 
 const LIVE_STATUS_URL = "https://aniliberty.top/api/v1/app/status"
 const MAXIMUM_BODY_BYTES = 64 * 1024
 const TRANSIENT_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 const jsonSchema = z.json()
 
-const fixtureSchema = z.object({
+const fixtureSchema = z.strictObject({
   status: z.number().int().min(100).max(599),
   contentType: z.string(),
   body: z.json().optional(),
@@ -41,7 +42,7 @@ function classify(response: SmokeResponse): SmokeResult {
     return { kind: "skip", token: "SKIP_ENV_TRANSIENT_HTTP" }
   }
   if (response.status !== 200) return { kind: "fail", token: "FAIL_ENDPOINT_DRIFT" }
-  if (!response.contentType.toLowerCase().includes("application/json")) {
+  if (!isJsonMediaType(response.contentType)) {
     return { kind: "fail", token: "FAIL_SCHEMA_DRIFT" }
   }
   return AppStatusSchema.safeParse(response.body).success
@@ -82,7 +83,7 @@ async function liveResponse(): Promise<SmokeResponse> {
     signal: AbortSignal.timeout(5_000),
   })
   const contentType = response.headers.get("content-type") ?? ""
-  if (response.status !== 200 || !contentType.toLowerCase().includes("application/json")) {
+  if (response.status !== 200 || !isJsonMediaType(contentType)) {
     await response.body?.cancel()
     return { contentType, status: response.status }
   }

@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 import { z } from "zod"
 
@@ -66,6 +68,56 @@ test("keeps Dependabot weekly and least-noisy for Bun and actions", () => {
   ])
 })
 
+test("uses a visible drift evidence directory with exact upload semantics", () => {
+  // Given: the scheduled drift workflow source
+  const source = readFileSync(".github/workflows/contract-drift.yml", "utf8")
+
+  // When: its repository-controlled evidence paths are inspected
+  const evidenceReferences = source.match(/drift-evidence/g) ?? []
+
+  // Then: every producer and uploader uses the same non-hidden directory
+  expect(evidenceReferences.length).toBe(5)
+  expect(source).not.toContain(".drift-evidence")
+})
+
+test("rejects Oracle workflow injection bypasses with specific diagnostics", async () => {
+  // Given: untrusted condition, curl-pipe-shell, and expression action input in one workflow
+  // When: the structural security validator checks the adversarial fixture
+  const result = await validate(["tests/fixtures/workflows/oracle-bypass.yml"])
+
+  // Then: every independent execution path is rejected
+  expect(result.exitCode).toBe(1)
+  expect(result.stderr).toContain("JOB_CONDITION_FORBIDDEN quality")
+  expect(result.stderr).toContain("RUN_COMMAND_FORBIDDEN quality.steps[1]")
+  expect(result.stderr).toContain("ACTION_INPUT_EXPRESSION_FORBIDDEN actions/checkout ref")
+})
+
+test("rejects mutated drift failure semantics", async () => {
+  // Given: a drift workflow whose final failure condition was weakened
+  const directory = mkdtempSync(join(tmpdir(), "aniliberty-drift-policy-"))
+  const workflowDirectory = join(directory, ".github", "workflows")
+  const workflowPath = join(workflowDirectory, "contract-drift.yml")
+  mkdirSync(workflowDirectory, { recursive: true })
+  writeFileSync(
+    workflowPath,
+    readFileSync(".github/workflows/contract-drift.yml", "utf8").replace(
+      "if: steps.hayase.outcome == 'failure' || steps.aniliberty.outcome == 'failure' || steps.smoke.outcome == 'failure'\n        run: exit 1",
+      "if: always()\n        run: exit 1",
+    ),
+  )
+
+  try {
+    // When: the validator checks the mutated workflow at its policy path
+    const result = await validate([workflowPath])
+
+    // Then: exact drift step semantics fail closed
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toContain("DRIFT_SEMANTICS_EXACT")
+  } finally {
+    rmSync(directory, { force: true, recursive: true })
+  }
+})
+
 test.each([
   ["mutable-action.yml", "ACTION_REF_IMMUTABLE actions/checkout@v4"],
   ["write-permission.yml", "PERMISSIONS_READ_ONLY contents=write"],
@@ -75,6 +127,10 @@ test.each([
   ["unsafe-interpolation.yml", "RUN_EXPRESSION_FORBIDDEN quality.steps[2]"],
   ["secret-reference.yml", "SECRETS_FORBIDDEN"],
   ["missing-version-comment.yml", "ACTION_VERSION_COMMENT_REQUIRED"],
+  ["unknown-step-field.yml", "STEP_WORKING_DIRECTORY_FORBIDDEN quality.steps[0]"],
+  ["step-shell.yml", "STEP_SHELL_FORBIDDEN quality.steps[0]"],
+  ["job-env.yml", "JOB_ENV_FORBIDDEN quality"],
+  ["continue-on-error.yml", "STEP_CONTINUE_ON_ERROR_FORBIDDEN quality.steps[0]"],
   ["malformed.yml", "YAML_INVALID"],
 ] as const)("rejects %s with a specific diagnostic", async (fixture, diagnostic) => {
   // Given: one workflow fixture carrying the named policy violation

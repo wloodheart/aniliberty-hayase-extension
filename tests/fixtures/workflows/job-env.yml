@@ -1,0 +1,15 @@
+name: Job env
+on: pull_request
+permissions:
+  contents: read
+concurrency:
+  group: job-env
+  cancel-in-progress: true
+jobs:
+  quality:
+    env:
+      BUN_INSTALL: /tmp/controlled
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: bun run check

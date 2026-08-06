@@ -1,0 +1,14 @@
+name: Step shell
+on: pull_request
+permissions:
+  contents: read
+concurrency:
+  group: step-shell
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: bun run check
+        shell: python

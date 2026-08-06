@@ -28,25 +28,25 @@ jobs:
       - name: Install frozen dependencies
         run: bun install --frozen-lockfile
       - name: Prepare drift evidence
-        run: mkdir -p .drift-evidence
+        run: mkdir -p drift-evidence
       - name: Compare current Hayase contract
         id: hayase
         continue-on-error: true
-        run: bun run contract:hayase 2> .drift-evidence/hayase.json
+        run: bun run contract:hayase 2> drift-evidence/hayase.json
       - name: Compare current AniLiberty contract
         id: aniliberty
         continue-on-error: true
-        run: bun run contract:aniliberty 2> .drift-evidence/aniliberty.json
+        run: bun run contract:aniliberty 2> drift-evidence/aniliberty.json
       - name: Classify live AniLiberty health
         id: smoke
         continue-on-error: true
-        run: bun run live:smoke 2> .drift-evidence/live-smoke.txt
+        run: bun run live:smoke 2> drift-evidence/live-smoke.txt
       - name: Upload confirmed drift evidence
         if: steps.hayase.outcome == 'failure' || steps.aniliberty.outcome == 'failure' || steps.smoke.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: contract-drift
-          path: .drift-evidence
+          path: drift-evidence
           if-no-files-found: error
           retention-days: 14
       - name: Fail on confirmed drift

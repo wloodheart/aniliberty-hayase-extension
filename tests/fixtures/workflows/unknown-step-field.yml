@@ -1,0 +1,14 @@
+name: Unknown step field
+on: pull_request
+permissions:
+  contents: read
+concurrency:
+  group: unknown-step-field
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: bun run check
+        working-directory: /tmp
