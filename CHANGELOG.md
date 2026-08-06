@@ -1,8 +1,10 @@
 # Changelog
 
-All notable changes will be recorded here. This repository has no published version yet.
+All notable changes will be recorded here.
 
 ## Unreleased
+
+## 0.1.0 - 2026-08-06
 
 ### Added
 
