@@ -1,4 +1,5 @@
-import { cpSync, mkdtempSync, rmSync, symlinkSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -54,4 +55,16 @@ export async function createReleaseWorkspace(): Promise<ReleaseWorkspace> {
 
 export function removeReleaseWorkspace(workspace: ReleaseWorkspace | undefined): void {
   if (workspace !== undefined) rmSync(workspace.path, { force: true, recursive: true })
+}
+
+export function replaceReleaseArtifact(workspace: ReleaseWorkspace, source: string): void {
+  const versionDirectory = join(workspace.path, ".release-site", `v${workspace.version}`)
+  const artifactPath = join(versionDirectory, "aniliberty.mjs")
+  const manifestPath = join(workspace.path, ".release-site", "index.json")
+  const sha256 = createHash("sha256").update(source).digest("hex")
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
+  manifest[0] = { ...manifest[0], sha256 }
+  writeFileSync(artifactPath, source)
+  writeFileSync(join(versionDirectory, "aniliberty.mjs.sha256"), `${sha256}  aniliberty.mjs\n`)
+  writeFileSync(manifestPath, JSON.stringify(manifest))
 }

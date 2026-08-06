@@ -1,16 +1,22 @@
 import type { ReleaseWorkspace } from "./artifacts.ts"
 import { loadReleaseArtifact } from "./manifest-loader.ts"
-
-const LOCAL_FETCH = globalThis.fetch
+import { WorkerFetchBridge, type WorkerFetchRequest } from "./worker-fetch-bridge.ts"
 
 export type WorkerMethod = "test" | "single" | "batch" | "movie"
 
 export type WorkerQuery = {
   readonly media: unknown
   readonly anilistId: number
+  readonly anidbAid?: number
+  readonly anidbEid?: number
+  readonly tvdbId?: number
+  readonly tvdbEId?: number
+  readonly imdbId?: string
+  readonly tmdbId?: string
   readonly titles: readonly string[]
   readonly episode: number
   readonly episodeCount?: number
+  readonly absoluteEpisodeNumber?: number
   readonly resolution: "2160" | "1080" | "720" | "540" | "480" | ""
   readonly exclusions: readonly string[]
 }
@@ -18,7 +24,7 @@ export type WorkerQuery = {
 export type SanitizedTorrentResult = {
   readonly title: string
   readonly link: string
-  readonly id?: number
+  readonly id: number | undefined
   readonly seeders: number
   readonly leechers: number
   readonly downloads: number
@@ -26,7 +32,7 @@ export type SanitizedTorrentResult = {
   readonly hash: string
   readonly size: number
   readonly date: Date
-  readonly type?: "batch" | "best" | "alt"
+  readonly type: "batch" | "best" | "alt" | undefined
 }
 
 export class WorkerCompatibilityError extends Error {
@@ -42,13 +48,7 @@ type WorkerResponse =
   | { readonly kind: "loaded" }
   | { readonly kind: "result"; readonly id: number; readonly value: unknown }
   | { readonly kind: "failure"; readonly id?: number; readonly message: string }
-  | {
-      readonly kind: "fetch"
-      readonly id: number
-      readonly url: string
-      readonly method: string
-      readonly headers: readonly (readonly [string, string])[]
-    }
+  | WorkerFetchRequest
 
 type PendingCall = {
   readonly resolve: (value: boolean | SanitizedTorrentResult[]) => void
@@ -58,19 +58,41 @@ type PendingCall = {
 export class HayaseWorkerHarness {
   private sequence = 0
   private readonly pending = new Map<number, PendingCall>()
+  private readonly fetchBridge: WorkerFetchBridge
+  private state: "loading" | "ready" | "closed" = "loading"
 
   private constructor(
     private readonly worker: Worker,
-    private readonly fixtureBaseUrl: URL,
+    fixtureBaseUrl: URL,
     private readonly loaded: Promise<void>,
   ) {
+    this.fetchBridge = new WorkerFetchBridge(worker, fixtureBaseUrl, () =>
+      this.fail("Worker stopped unexpectedly"),
+    )
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => this.receive(event.data)
+    worker.addEventListener("error", (event) => {
+      event.preventDefault()
+      this.fail("Worker stopped unexpectedly")
+    })
+    worker.addEventListener("messageerror", () => this.fail("Worker stopped unexpectedly"))
+    worker.addEventListener("close", () => this.fail("Worker stopped unexpectedly"))
   }
 
   static async create(
     workspace: ReleaseWorkspace,
     fixtureBaseUrl: URL,
   ): Promise<HayaseWorkerHarness> {
+    const harness = HayaseWorkerHarness.start(workspace, fixtureBaseUrl)
+    try {
+      await harness.loaded
+      return harness
+    } catch (error) {
+      await harness.close()
+      throw error
+    }
+  }
+
+  static start(workspace: ReleaseWorkspace, fixtureBaseUrl: URL): HayaseWorkerHarness {
     const artifact = loadReleaseArtifact(workspace)
     const worker = new Worker(new URL("./hayase-worker-runtime.ts", import.meta.url), {
       type: "module",
@@ -83,14 +105,12 @@ export class HayaseWorkerHarness {
     })
     const harness = new HayaseWorkerHarness(worker, fixtureBaseUrl, loaded)
     harness.loadResolution = { resolve: resolveLoaded, reject: rejectLoaded }
-    worker.postMessage({ kind: "load", artifact: artifact.buffer }, [artifact.buffer])
     try {
-      await loaded
-      return harness
-    } catch (error) {
-      worker.terminate()
-      throw error
+      worker.postMessage({ kind: "load", artifact: artifact.buffer }, [artifact.buffer])
+    } catch {
+      harness.fail("Worker artifact import failed")
     }
+    return harness
   }
 
   private loadResolution:
@@ -101,6 +121,9 @@ export class HayaseWorkerHarness {
     | undefined
 
   call(method: WorkerMethod, query?: WorkerQuery): Promise<boolean | SanitizedTorrentResult[]> {
+    if (this.state === "closed") {
+      return Promise.reject(new WorkerCompatibilityError("Worker closed"))
+    }
     const id = this.sequence
     this.sequence += 1
     return new Promise((resolve, reject) => {
@@ -114,19 +137,23 @@ export class HayaseWorkerHarness {
     })
   }
 
+  ready(): Promise<void> {
+    return this.loaded
+  }
+
   private receive(message: WorkerResponse): void {
     if (message.kind === "loaded") {
+      this.state = "ready"
       this.loadResolution?.resolve?.()
       this.loadResolution = undefined
       return
     }
     if (message.kind === "fetch") {
-      void this.bridgeFetch(message)
+      this.fetchBridge.handle(message)
       return
     }
     if (message.kind === "failure" && message.id === undefined) {
-      this.loadResolution?.reject?.(new WorkerCompatibilityError(message.message))
-      this.loadResolution = undefined
+      this.fail(message.message)
       return
     }
     const id = message.id
@@ -143,36 +170,21 @@ export class HayaseWorkerHarness {
     }
   }
 
-  private async bridgeFetch(
-    message: Extract<WorkerResponse, { readonly kind: "fetch" }>,
-  ): Promise<void> {
-    const upstream = new URL(message.url)
-    const target = new URL(
-      `${upstream.pathname.replace(/^\/api\/v1\//, "")}${upstream.search}`,
-      this.fixtureBaseUrl,
-    )
-    const headers = new Headers(message.headers.map(([name, value]) => [name, value]))
-    const response = await LOCAL_FETCH(target, { headers, method: message.method })
-    const body = await response.arrayBuffer()
-    this.worker.postMessage(
-      {
-        kind: "fetch-result",
-        id: message.id,
-        status: response.status,
-        headers: Array.from(response.headers.entries()),
-        body,
-      },
-      [body],
-    )
+  private fail(message: string): void {
+    if (this.state === "closed") return
+    this.state = "closed"
+    const error = new WorkerCompatibilityError(message)
+    this.loadResolution?.reject?.(error)
+    this.loadResolution = undefined
+    for (const pending of this.pending.values()) pending.reject(error)
+    this.pending.clear()
+    this.fetchBridge.close()
+    this.worker.terminate()
   }
 
-  async close(): Promise<void> {
-    await this.loaded
-    this.worker.terminate()
-    for (const pending of this.pending.values()) {
-      pending.reject(new WorkerCompatibilityError("Worker closed"))
-    }
-    this.pending.clear()
+  close(): Promise<void> {
+    this.fail("Worker closed")
+    return Promise.resolve()
   }
 
   async [Symbol.asyncDispose](): Promise<void> {

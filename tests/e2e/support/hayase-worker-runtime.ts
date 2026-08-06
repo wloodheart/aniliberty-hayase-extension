@@ -1,5 +1,5 @@
-type Accuracy = "high" | "medium" | "low"
-type ResultType = "batch" | "best" | "alt"
+import { computeAccuracy, queryProxy, sanitizeResults } from "./hayase-sanitizer.ts"
+
 type SourceMethod = "test" | "single" | "batch" | "movie"
 
 type LoadMessage = { readonly kind: "load"; readonly artifact: ArrayBuffer }
@@ -16,7 +16,8 @@ type FetchResultMessage = {
   readonly headers: readonly (readonly [string, string])[]
   readonly body: ArrayBuffer
 }
-type IncomingMessage = LoadMessage | CallMessage | FetchResultMessage
+type FetchFailureMessage = { readonly kind: "fetch-failure"; readonly id: number }
+type IncomingMessage = LoadMessage | CallMessage | FetchResultMessage | FetchFailureMessage
 
 type FetchRequestMessage = {
   readonly kind: "fetch"
@@ -26,21 +27,22 @@ type FetchRequestMessage = {
   readonly headers: readonly (readonly [string, string])[]
 }
 
-const ACCURACY_RANK = { high: 0, medium: 1, low: 2 } as const
-const QUERY_RULES = {
-  anilistId: { setTo: "medium", maxAllowed: "high" },
-  episode: { setTo: "low", maxAllowed: "high" },
-  episodeCount: { setTo: "low", maxAllowed: "high" },
-  resolution: { setTo: "low", maxAllowed: "high" },
-  exclusions: { setTo: "low", maxAllowed: "high" },
-  titles: { setTo: "low", maxAllowed: "medium" },
-  media: { setTo: "low", maxAllowed: "medium" },
-} as const
-const RESULT_TYPES = new Set<ResultType>(["batch", "best", "alt"])
-
 let source: object | undefined
 let fetchSequence = 0
-const fetches = new Map<number, (response: Response) => void>()
+type PendingFetch = {
+  readonly resolve: (response: Response) => void
+  readonly reject: (error: Error) => void
+}
+
+class WorkerFetchError extends Error {
+  readonly name = "WorkerFetchError"
+
+  constructor() {
+    super("Worker fetch failed")
+  }
+}
+
+const fetches = new Map<number, PendingFetch>()
 
 function post(message: object, transfer?: Transferable[]): void {
   self.postMessage(message, transfer ?? [])
@@ -51,8 +53,8 @@ const bridgeFetch = Object.assign(
     const id = fetchSequence
     fetchSequence += 1
     const request = new Request(input, init)
-    return new Promise<Response>((resolve) => {
-      fetches.set(id, resolve)
+    return new Promise<Response>((resolve, reject) => {
+      fetches.set(id, { resolve, reject })
       const message: FetchRequestMessage = {
         kind: "fetch",
         id,
@@ -60,88 +62,16 @@ const bridgeFetch = Object.assign(
         method: request.method,
         headers: Array.from(request.headers.entries()),
       }
-      post(message)
+      try {
+        post(message)
+      } catch {
+        fetches.delete(id)
+        reject(new WorkerFetchError())
+      }
     })
   },
   { preconnect: () => undefined },
 )
-
-function queryProxy(query: object): { readonly proxy: object; readonly accessed: Set<string> } {
-  const accessed = new Set<string>()
-  return {
-    accessed,
-    proxy: new Proxy(query, {
-      get(target, property, receiver) {
-        if (typeof property === "string") accessed.add(property)
-        return Reflect.get(target, property, receiver)
-      },
-    }),
-  }
-}
-
-function computeAccuracy(accessed: ReadonlySet<string>): Accuracy {
-  let bestSetToRank = Number.POSITIVE_INFINITY
-  let worstMaxAllowedRank = 0
-  for (const key of accessed) {
-    if (!(key in QUERY_RULES)) continue
-    const rule = Reflect.get(QUERY_RULES, key)
-    const setToRank = Reflect.get(ACCURACY_RANK, rule.setTo)
-    const maxAllowedRank = Reflect.get(ACCURACY_RANK, rule.maxAllowed)
-    bestSetToRank = Math.min(bestSetToRank, setToRank)
-    worstMaxAllowedRank = Math.max(worstMaxAllowedRank, maxAllowedRank)
-  }
-  const rank = Math.max(
-    bestSetToRank === Number.POSITIVE_INFINITY ? 0 : bestSetToRank,
-    worstMaxAllowedRank,
-  )
-  return rank === 0 ? "high" : rank === 1 ? "medium" : "low"
-}
-
-function finiteCount(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0
-}
-
-function sanitizeResults(value: unknown, maximum: Accuracy): readonly object[] | null {
-  if (!Array.isArray(value)) return null
-  const results: object[] = []
-  const maximumRank = ACCURACY_RANK[maximum]
-  for (const item of value) {
-    if (typeof item !== "object" || item === null) return null
-    const hash = Reflect.get(item, "hash")
-    const link = Reflect.get(item, "link")
-    if (
-      typeof hash !== "string" ||
-      !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(hash) ||
-      typeof link !== "string" ||
-      link.length === 0
-    ) {
-      return null
-    }
-    const accuracy = Reflect.get(item, "accuracy")
-    const accuracyRank =
-      typeof accuracy === "string" && accuracy in ACCURACY_RANK
-        ? Reflect.get(ACCURACY_RANK, accuracy)
-        : undefined
-    const date = Reflect.get(item, "date")
-    const id = Reflect.get(item, "id")
-    const type = Reflect.get(item, "type")
-    const size = Reflect.get(item, "size")
-    results.push({
-      hash: hash.toLowerCase(),
-      accuracy: accuracyRank !== undefined && accuracyRank <= maximumRank ? accuracy : maximum,
-      title: typeof Reflect.get(item, "title") === "string" ? Reflect.get(item, "title") : "",
-      link,
-      seeders: finiteCount(Reflect.get(item, "seeders")),
-      leechers: finiteCount(Reflect.get(item, "leechers")),
-      downloads: finiteCount(Reflect.get(item, "downloads")),
-      size: typeof size === "number" && Number.isFinite(size) ? Math.max(0, size) : 0,
-      date: date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date(0),
-      ...(typeof id === "number" ? { id } : {}),
-      ...(typeof type === "string" && RESULT_TYPES.has(type as ResultType) ? { type } : {}),
-    })
-  }
-  return results
-}
 
 async function loadArtifact(artifact: ArrayBuffer): Promise<void> {
   const url = URL.createObjectURL(new Blob([artifact], { type: "application/javascript" }))
@@ -167,23 +97,26 @@ async function callSource(message: CallMessage): Promise<void> {
   const { proxy, accessed } = queryProxy({ ...message.query, fetch: bridgeFetch })
   const raw = await Reflect.apply(callable, loaded, [proxy])
   const sanitized = sanitizeResults(raw, computeAccuracy(accessed))
-  if (sanitized === null) throw new TypeError("invalid torrent result")
   post({ kind: "result", id: message.id, value: sanitized })
 }
 
 globalThis.fetch = bridgeFetch
 self.onmessage = (event: MessageEvent<IncomingMessage>) => {
   const message = event.data
-  if (message.kind === "fetch-result") {
-    const resolve = fetches.get(message.id)
-    if (resolve !== undefined) {
+  if (message.kind === "fetch-result" || message.kind === "fetch-failure") {
+    const pending = fetches.get(message.id)
+    if (pending !== undefined) {
       fetches.delete(message.id)
-      resolve(
-        new Response(message.body, {
-          headers: new Headers(message.headers.map(([name, value]) => [name, value])),
-          status: message.status,
-        }),
-      )
+      if (message.kind === "fetch-result") {
+        pending.resolve(
+          new Response(message.body, {
+            headers: new Headers(message.headers.map(([name, value]) => [name, value])),
+            status: message.status,
+          }),
+        )
+      } else {
+        pending.reject(new WorkerFetchError())
+      }
     }
     return
   }

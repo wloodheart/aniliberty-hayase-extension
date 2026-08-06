@@ -77,34 +77,44 @@ describe("generated release manifest import", () => {
         "utf8",
       ),
     )
-    torrents[0].hash = "unsafe-query-payload"
+    const invalidTorrents = [{ ...torrents[0], hash: "unsafe-query-payload" }]
+    let torrentRequests = 0
+    const workerQuery = {
+      media: {
+        id: 1,
+        title: { userPreferred: "Hell Mode", english: "Hell Mode", romaji: null, native: null },
+        startDate: { year: 2026 },
+        episodes: 12,
+        format: "TV",
+      },
+      anilistId: 1,
+      titles: ["Hell Mode"],
+      episode: 5,
+      episodeCount: 12,
+      resolution: "1080" as const,
+      exclusions: [],
+    }
 
     await withAniLibertyServer(
-      (request) =>
-        new URL(request.url).pathname.endsWith("/app/search/releases")
-          ? jsonResponse(search)
-          : Response.json(torrents),
+      (request) => {
+        if (new URL(request.url).pathname.endsWith("/app/search/releases")) {
+          return jsonResponse(search)
+        }
+        torrentRequests += 1
+        return Response.json(torrentRequests === 1 ? invalidTorrents : torrents)
+      },
       async (baseUrl) => {
         await using harness = await HayaseWorkerHarness.create(activeWorkspace, baseUrl)
-        const failure = harness.call("single", {
-          media: {
-            id: 1,
-            title: { userPreferred: "Hell Mode", english: "Hell Mode", romaji: null, native: null },
-            startDate: { year: 2026 },
-            episodes: 12,
-            format: "TV",
-          },
-          anilistId: 1,
-          titles: ["Hell Mode"],
-          episode: 5,
-          episodeCount: 12,
-          resolution: "1080",
-          exclusions: [],
-        })
+        const failure = harness.call("single", workerQuery)
         const error = await captureError(failure)
         expect(error.message).toBe("AniLiberty is unavailable")
         expect(JSON.stringify(error)).not.toContain("unsafe-query-payload")
+        const retry = await harness.call("single", workerQuery)
+        expect(Array.isArray(retry) ? retry.map(({ hash }) => hash) : retry).toEqual([
+          torrents[0].hash,
+        ])
       },
     )
+    expect(torrentRequests).toBe(2)
   })
 })
