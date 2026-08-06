@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { z } from "zod"
+
 const directories: string[] = []
+const concurrencySchema = z.object({
+  concurrency: z.object({ group: z.string(), "cancel-in-progress": z.boolean() }),
+})
 
 type ValidationRun = {
   readonly exitCode: number
@@ -80,6 +85,11 @@ test.each([
   },
   {
     diagnostic: "RELEASE_SEMANTICS_EXACT",
+    replacement: `group: release-\${{ github.ref }}`,
+    search: "group: release",
+  },
+  {
+    diagnostic: "RELEASE_SEMANTICS_EXACT",
     replacement: "attest:\n    needs: release",
     search: "attest:\n    needs: build",
   },
@@ -121,6 +131,21 @@ test("keeps every write-capable job explicitly unavailable to manual dry-run", (
   // Then: no workflow_dispatch path can satisfy a write-capable job
   expect(serialized.match(/github\.event_name == 'push'/g)).toHaveLength(3)
   expect(serialized).not.toContain("github.event_name != 'workflow_dispatch'")
+})
+
+test("serializes distinct release tags and manual dry-runs in one global group", () => {
+  // Given: two version tags and one manual dry-run entering the release workflow
+  const runRefs = ["refs/tags/v1.2.3", "refs/tags/v1.2.4", "refs/heads/main"] as const
+  const workflow = concurrencySchema.parse(
+    Bun.YAML.parse(readFileSync(".github/workflows/release.yml", "utf8")),
+  )
+
+  // When: GitHub derives each run's repository concurrency identity
+  const groups = runRefs.map((ref) => ({ group: workflow.concurrency.group, ref }))
+
+  // Then: every run waits in the same non-cancelling publication queue
+  expect(groups).toEqual(runRefs.map((ref) => ({ group: "release", ref })))
+  expect(workflow.concurrency["cancel-in-progress"]).toBeFalse()
 })
 
 test("publishes one fail-on-existing Release only after attestation and before Pages", () => {

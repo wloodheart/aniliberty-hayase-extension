@@ -129,7 +129,7 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
   const exact =
     workflow.name === "Release" &&
     JSON.stringify(workflow.on) === trigger &&
-    workflow.concurrency?.group === `release-\${{ github.ref }}` &&
+    workflow.concurrency?.group === "release" &&
     workflow.concurrency["cancel-in-progress"] === false &&
     Object.keys(workflow.jobs).toSorted().join(",") === "attest,build,deploy,release" &&
     build?.["runs-on"] === "ubuntu-latest" &&
