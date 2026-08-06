@@ -79,9 +79,13 @@ function verifyAssets(
   }
 }
 
-function verifyRestoredDirectory(directory: string, coordinates: ReleaseCoordinates): void {
+function verifyRestoredDirectory(
+  directory: string,
+  coordinates: ReleaseCoordinates,
+  allowCoordinate: boolean,
+): void {
   for (const tag of readdirSync(directory).toSorted()) {
-    if (tag === coordinates.tag) throw new CurrentReleaseExistsError(tag)
+    if (tag === coordinates.tag && !allowCoordinate) throw new CurrentReleaseExistsError(tag)
     if (!strictTagPattern.test(tag)) {
       throw new ReleaseHistoryError(`Release history fixture contains invalid tag: ${tag}`)
     }
@@ -94,6 +98,7 @@ function verifyRestoredDirectory(directory: string, coordinates: ReleaseCoordina
 }
 
 export function restoreReleaseHistory(input: {
+  readonly allowCoordinate?: boolean
   readonly commandRunner?: ReleaseCommandRunner
   readonly coordinates: ReleaseCoordinates
   readonly fixtureDirectory?: string
@@ -108,7 +113,7 @@ export function restoreReleaseHistory(input: {
     try {
       if (input.fixtureDirectory !== undefined) {
         cpSync(input.fixtureDirectory, stagedSite, { recursive: true })
-        verifyRestoredDirectory(stagedSite, input.coordinates)
+        verifyRestoredDirectory(stagedSite, input.coordinates, input.allowCoordinate === true)
         if (readdirSync(stagedSite).length > 0) renameSync(stagedSite, site)
         return
       }
@@ -130,7 +135,7 @@ export function restoreReleaseHistory(input: {
           throw new ReleaseHistoryError(`Duplicate GitHub Release tag: ${release.tag_name}`)
         }
         tags.add(release.tag_name)
-        if (release.tag_name === input.coordinates.tag) {
+        if (release.tag_name === input.coordinates.tag && input.allowCoordinate !== true) {
           throw new CurrentReleaseExistsError(release.tag_name)
         }
       }

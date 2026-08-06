@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync } from "node:fs"
-import { dirname, join, normalize } from "node:path"
+import { join } from "node:path"
+
+import { normalizedSentences, validateDocument } from "./docs-claim-rules.ts"
 
 const root = join(import.meta.dir, "../..")
+
 const requiredDocuments = [
   "README.md",
   "LICENSE",
@@ -38,49 +41,25 @@ function read(relativePath: string): string {
   return readFileSync(join(root, relativePath), "utf8")
 }
 
-function headingExists(markdown: string, heading: string): boolean {
-  return new RegExp(`^#{1,6} ${heading}$`, "imu").test(markdown)
+function markdownSection(markdown: string, heading: string): string | null {
+  const lines = markdown.split("\n")
+  const index = lines.indexOf(`## ${heading}`)
+  if (index < 0) return null
+  const section: string[] = []
+  for (const line of lines.slice(index + 1)) {
+    if (line.startsWith("# ") || line.startsWith("## ")) break
+    section.push(line)
+  }
+  return section.join("\n").trim()
 }
 
-function readmeViolations(markdown: string, scripts: ReadonlySet<string>): readonly string[] {
-  const violations: string[] = []
-  if (/\bofficial (?:extension|integration|project|source)\b/iu.test(markdown)) {
-    violations.push("AFFILIATION_CLAIM")
-  }
-  if (/\b(?:high|perfect) accuracy\b/iu.test(markdown)) violations.push("ACCURACY_CLAIM")
-  if (/\b(?:supports?|provides?|includes?) HLS\b|\bHLS support\b/iu.test(markdown)) {
-    violations.push("HLS_CLAIM")
-  }
-  if (/raw\.githubusercontent\.com|\/refs\/heads\/|\/blob\/main\//iu.test(markdown)) {
-    violations.push("MOVING_ARTIFACT_URL")
-  }
-  if (
-    /https:\/\/(?:example|owner)\.github\.io|--repository\s+(?:example|owner)\//iu.test(markdown)
-  ) {
-    violations.push("PLACEHOLDER_INSTALL_URL")
-  }
-  const commands = markdown.matchAll(/\bbun run ([a-z][\w:-]*)/gu)
-  for (const command of commands) {
-    const script = command[1]
-    if (script !== undefined && !scripts.has(script)) {
-      violations.push(`UNKNOWN_SCRIPT:${script}`)
-    }
-  }
-  return violations
-}
-
-function localCommands(markdown: string): readonly string[] {
-  return Array.from(markdown.matchAll(/```sh local\n([\s\S]*?)```/gu), (match) => match[1] ?? "")
-    .flatMap((block) => block.split("\n"))
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-}
-
-function relativeLinks(markdown: string): readonly string[] {
-  return Array.from(
-    markdown.matchAll(/\[[^\]]+\]\((?!https?:|#)([^)]+)\)/gu),
-    (match) => (match[1] ?? "").split("#", 1)[0] ?? "",
-  ).filter((path) => path.length > 0)
+function requiredMarkdownDocuments(): readonly {
+  readonly markdown: string
+  readonly path: string
+}[] {
+  return requiredDocuments
+    .filter((path) => path.endsWith(".md"))
+    .map((path) => ({ markdown: read(path), path }))
 }
 
 describe("project documentation contract", () => {
@@ -96,81 +75,38 @@ describe("project documentation contract", () => {
   test("documents supported behavior without unsafe claims", () => {
     // Given: package scripts and the user README
     const metadata: PackageMetadata = JSON.parse(read("package.json"))
+    const documents = requiredMarkdownDocuments()
     const readme = read("README.md")
 
-    // When: claims and command names are validated
-    const violations = readmeViolations(readme, new Set(Object.keys(metadata.scripts)))
+    // When: every required Markdown document is validated
+    const scripts = new Set(Object.keys(metadata.scripts))
+    const violations = documents.flatMap((document) =>
+      validateDocument(document.markdown, document.path, scripts),
+    )
 
     // Then: required boundaries are present and forbidden claims are absent
     expect(violations).toEqual([])
-    expect(requiredReadmeSections.filter((heading) => !headingExists(readme, heading))).toEqual([])
-    expect(readme).toContain("https://<owner>.github.io/<repository>/index.json")
-    expect(readme).toContain("vMAJOR.MINOR.PATCH/aniliberty.mjs")
-    expect(readme).toContain("https://aniliberty.top/api/v1/app/status")
-    expect(readme).toContain("https://aniliberty.top/api/v1/app/search/releases?query=")
-    expect(readme).toContain("https://aniliberty.top/api/v1/anime/torrents/release/{releaseId}")
-    expect(readme).toContain("assets/aniliberty-neutral.svg")
-    expect(readme).toContain("unofficial Hayase torrent source")
-    expect(readme).toContain("torrent-only")
-    expect(readme).toContain("Russian-dub")
-    expect(readme).toContain("`medium` accuracy")
-    expect(readme).toContain("no HLS playback")
-    expect(readme).toContain("no telemetry")
-    expect(readme).toContain("no-match result `[]`")
-  })
-
-  test("reports each unsafe fixture violation independently", () => {
-    // Given: one README fixture containing every forbidden claim class
-    const metadata: PackageMetadata = JSON.parse(read("package.json"))
-    const fixture = read("tests/fixtures/docs/invalid-readme.md")
-
-    // When: the fixture is validated without fail-fast behavior
-    const violations = readmeViolations(fixture, new Set(Object.keys(metadata.scripts)))
-
-    // Then: every independent violation is reported
-    expect(violations).toEqual([
-      "AFFILIATION_CLAIM",
-      "ACCURACY_CLAIM",
-      "HLS_CLAIM",
-      "MOVING_ARTIFACT_URL",
-      "UNKNOWN_SCRIPT:missing-script",
-    ])
-  })
-
-  test("keeps local command blocks tied to package scripts", () => {
-    // Given: all fenced local commands and current package scripts
-    const metadata: PackageMetadata = JSON.parse(read("package.json"))
-    const markdown = requiredDocuments
-      .filter((path) => path.endsWith(".md"))
-      .map(read)
-      .join("\n")
-
-    // When: command blocks are parsed
-    const commands = localCommands(markdown)
-    const referencedScripts = commands.flatMap((command) =>
-      Array.from(command.matchAll(/\bbun run ([a-z][\w:-]*)/gu), (match) => match[1] ?? ""),
-    )
-
-    // Then: required commands are real and no stale package script is named
-    expect(commands).toContain("bun install --frozen-lockfile")
-    expect(commands).toContain("bun run check")
-    expect(referencedScripts).toContain("release:dry-run")
-    expect(referencedScripts.filter((script) => !(script in metadata.scripts))).toEqual([])
-  })
-
-  test("keeps relative documentation links resolvable", () => {
-    // Given: every Markdown document in the required surface
-    const documents = requiredDocuments.filter((path) => path.endsWith(".md"))
-
-    // When: relative links are resolved from each document
-    const broken = documents.flatMap((document) =>
-      relativeLinks(read(document))
-        .map((link) => normalize(join(dirname(document), link)))
-        .filter((link) => !existsSync(join(root, link))),
-    )
-
-    // Then: all linked repository paths exist
-    expect(broken).toEqual([])
+    expect(
+      requiredReadmeSections.filter((heading) => markdownSection(readme, heading) === null),
+    ).toEqual([])
+    const installation = markdownSection(readme, "Installation") ?? ""
+    const status = markdownSection(readme, "Status and scope") ?? ""
+    const privacy = markdownSection(readme, "Privacy and security") ?? ""
+    expect(installation).toContain("https://<owner>.github.io/<repository>/index.json")
+    expect(installation).toContain("vMAJOR.MINOR.PATCH/aniliberty.mjs")
+    expect(installation).toContain("pinned Hayase does not enforce the SHA-256")
+    expect(installation).toContain("repository tooling")
+    expect(status).toContain("unofficial Hayase torrent source")
+    expect(status).toContain("torrent-only")
+    expect(status).toContain("Russian-dub")
+    expect(status).toContain("`medium` accuracy")
+    expect(status).toContain("no HLS playback")
+    expect(privacy).toContain("https://aniliberty.top/api/v1/app/status")
+    expect(privacy).toContain("https://aniliberty.top/api/v1/app/search/releases?query=")
+    expect(privacy).toContain("https://aniliberty.top/api/v1/anime/torrents/release/{releaseId}")
+    expect(normalizedSentences(privacy).join(" ")).toContain("trimmed original hayase titles")
+    expect(privacy).toContain("case and punctuation")
+    expect(privacy).toContain("no telemetry")
   })
 
   test("records maintenance, security, legal, and release boundaries", () => {
@@ -181,20 +117,28 @@ describe("project documentation contract", () => {
 
     // When: stable operational markers are inspected
     const missingHeadings = requiredMaintenanceSections.filter(
-      (heading) => !headingExists(maintenance, heading),
+      (heading) => markdownSection(maintenance, heading) === null,
     )
 
     // Then: machine-relevant contracts and policies are explicit
     expect(missingHeadings).toEqual([])
-    expect(maintenance).toContain("56151c710a9265f42994bd72cff007598c596bab")
-    expect(maintenance).toContain("PASS_API_OK")
-    expect(maintenance).toContain("SKIP_ENV_BLOCKED_403")
-    expect(maintenance).toContain("SKIP_ENV_NETWORK")
-    expect(maintenance).toContain("SKIP_ENV_TRANSIENT_HTTP")
-    expect(maintenance).toContain("FAIL_ENDPOINT_DRIFT")
-    expect(maintenance).toContain("FAIL_SCHEMA_DRIFT")
-    expect(security).toContain("private vulnerability reporting")
-    expect(security).toContain("Don't disclose")
+    const support = markdownSection(maintenance, "Support matrix") ?? ""
+    const drift = markdownSection(maintenance, "Contract drift response") ?? ""
+    const rollback = markdownSection(maintenance, "Rollback") ?? ""
+    const reporting = markdownSection(security, "Report a vulnerability") ?? ""
+    expect(support).toContain("56151c710a9265f42994bd72cff007598c596bab")
+    for (const token of [
+      "PASS_API_OK",
+      "SKIP_ENV_BLOCKED_403",
+      "SKIP_ENV_NETWORK",
+      "SKIP_ENV_TRANSIENT_HTTP",
+      "FAIL_ENDPOINT_DRIFT",
+      "FAIL_SCHEMA_DRIFT",
+    ])
+      expect(drift).toContain(token)
+    expect(rollback).toContain("workflow_dispatch")
+    expect(reporting).toContain("private vulnerability reporting")
+    expect(reporting).toContain("Don't disclose")
     expect(license).toContain("Permission is hereby granted, free of charge")
     expect(license).toContain('THE SOFTWARE IS PROVIDED "AS IS"')
   })

@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs"
+import { join } from "node:path"
 
 import { z } from "zod"
 
 import { validateWorkflow } from "./workflow-policy.ts"
+import { validateRollbackQualityScripts } from "./workflow-rollback-quality-policy.ts"
 import { WorkflowSchema } from "./workflow-schema.ts"
 
 class WorkflowInputError extends Error {
@@ -27,6 +29,9 @@ function main(): void {
   const paths = Bun.argv.slice(2).filter((argument) => argument !== "--")
   if (paths.length === 0) throw new WorkflowInputError("Usage: validate-workflows.ts <path>...")
   const diagnostics = paths.flatMap(parseWorkflow)
+  if (!validateRollbackQualityScripts(readFileSync(join(process.cwd(), "package.json"), "utf8"))) {
+    diagnostics.push("package.json: ROLLBACK_QUALITY_SCRIPT_EXACT")
+  }
   if (diagnostics.length > 0) {
     console.error(diagnostics.join("\n"))
     process.exitCode = 1

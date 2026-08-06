@@ -9,11 +9,12 @@ history, but may not receive fixes.
 ## Report a vulnerability
 
 Use the repository's GitHub **Security** tab and its **Report a vulnerability** private vulnerability reporting flow. If
-that button isn't available, open a private GitHub Security Advisory draft for the repository owner. No project security
-email is published.
+that button isn't available, open a detail-free public issue asking the maintainers to provide a private contact channel.
+Don't include exploit details, reproduction steps, private searches, IP addresses, tokens, or other personal data in that
+public issue. No project security email is published.
 
-Include the affected version or commit, impact, reproduction steps using synthetic data, and a suggested fix if
-available. Remove private searches, IP addresses, tokens, copyrighted payloads, and other personal data from the report.
+In a private report, include the affected version or commit, impact, reproduction steps using synthetic data, and a
+suggested fix if available. Remove private searches, IP addresses, tokens, copyrighted payloads, and other personal data.
 
 Don't disclose an exploitable issue in a public issue, discussion, pull request, or social post before maintainers have
 had a reasonable chance to assess and fix it. Public reports are suitable for non-sensitive availability or

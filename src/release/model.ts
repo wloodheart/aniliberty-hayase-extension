@@ -2,6 +2,7 @@ import { z } from "zod"
 
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/
+const PUBLICATION_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/
 const REPOSITORY_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/
 const PLACEHOLDER_PATTERN =
@@ -10,6 +11,10 @@ const MOVING_URL_PATTERN =
   /raw\.githubusercontent\.com|\/refs\/heads\/|github\.com\/[^/]+\/[^/]+\/(?:blob|tree)\/[^/]+(?:\/|$)/i
 
 const ReleaseVersionSchema = z.string().regex(SEMVER_PATTERN).brand<"ReleaseVersion">()
+const PublicationVersionSchema = z
+  .string()
+  .regex(PUBLICATION_VERSION_PATTERN)
+  .brand<"ReleaseVersion">()
 const ReleaseUrlSchema = z
   .url()
   .refine((value) => !MOVING_URL_PATTERN.test(value))
@@ -56,6 +61,14 @@ export class InvalidVersionError extends Error {
   }
 }
 
+export class InvalidPublicationVersionError extends Error {
+  readonly name = "InvalidPublicationVersionError"
+
+  constructor(readonly value: string) {
+    super(`Release version must be strict publication semver: ${value}`)
+  }
+}
+
 export class InvalidRepositoryError extends Error {
   readonly name = "InvalidRepositoryError"
 
@@ -77,6 +90,12 @@ export function parseReleaseVersion(value: string): ReleaseVersion {
   if (!result.success) {
     throw new InvalidVersionError(value)
   }
+  return result.data
+}
+
+export function parsePublicationVersion(value: string): ReleaseVersion {
+  const result = PublicationVersionSchema.safeParse(value)
+  if (!result.success) throw new InvalidPublicationVersionError(value)
   return result.data
 }
 

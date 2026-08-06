@@ -3,6 +3,7 @@ import type { WorkflowJob, WorkflowPermissions, WorkflowStep } from "./workflow-
 const APPROVED_COMMANDS = new Set([
   "bun install --frozen-lockfile",
   "bun run check",
+  "bun run check:rollback",
   "bun run build",
   "bun run verify:bundle",
   "bun run release:workflow validate",

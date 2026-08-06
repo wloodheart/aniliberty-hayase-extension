@@ -7,7 +7,10 @@ import { parseGitHubRepository } from "../src/release/model.ts"
 import { buildRelease } from "./build-release.ts"
 import { restoreReleaseHistory } from "./release-history.ts"
 import { verifyReleasePayloadDirectory, verifyReleaseSite } from "./release-integrity.ts"
+import { parseRollbackCoordinates, prepareRollbackArtifacts } from "./release-rollback.ts"
 import { parseUniqueJson } from "./strict-json.ts"
+
+export { parseRollbackCoordinates, prepareRollbackArtifacts } from "./release-rollback.ts"
 
 const strictVersionSchema = z.string().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/)
 const packageSchema = z.object({ version: strictVersionSchema })
@@ -19,6 +22,7 @@ const environmentSchema = z.object({
   GITHUB_REPOSITORY: z.string().default(""),
   GITHUB_OUTPUT: z.string().optional(),
   RELEASE_HISTORY_FIXTURE: z.string().optional(),
+  ROLLBACK_TARGET_VERSION: z.string().optional(),
 })
 
 export type ReleaseCoordinates = {
@@ -106,9 +110,31 @@ function environmentCoordinates(): ReleaseCoordinates {
   })
 }
 
+function rollbackEnvironmentCoordinates(): ReleaseCoordinates {
+  const environment = environmentSchema.parse(process.env)
+  return parseRollbackCoordinates({
+    eventName: environment.GITHUB_EVENT_NAME,
+    ref: environment.GITHUB_REF,
+    repository: environment.GITHUB_REPOSITORY,
+    targetVersion: environment.ROLLBACK_TARGET_VERSION ?? "",
+  })
+}
+
 async function main(): Promise<void> {
   const environment = environmentSchema.parse(process.env)
   const [mode] = Bun.argv.slice(2).filter((argument) => argument !== "--")
+  if (mode === "rollback-prepare") {
+    const coordinates = rollbackEnvironmentCoordinates()
+    const result = prepareRollbackArtifacts({
+      coordinates,
+      ...(environment.RELEASE_HISTORY_FIXTURE === undefined
+        ? {}
+        : { fixtureDirectory: environment.RELEASE_HISTORY_FIXTURE }),
+      workspace: process.cwd(),
+    })
+    console.log(result.sha256)
+    return
+  }
   const coordinates = environmentCoordinates()
   if (mode === "validate") {
     const output = environment.GITHUB_OUTPUT
@@ -138,7 +164,9 @@ async function main(): Promise<void> {
     console.log(verifyReleasePayload({ coordinates, workspace: process.cwd() }).sha256)
     return
   }
-  throw new ReleaseCoordinateError("Expected validate, restore, prepare, or verify-payload mode")
+  throw new ReleaseCoordinateError(
+    "Expected validate, restore, prepare, verify-payload, or rollback-prepare mode",
+  )
 }
 
 if (import.meta.main) {

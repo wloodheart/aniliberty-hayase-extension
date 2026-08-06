@@ -1,3 +1,4 @@
+import { validateRollbackWorkflow } from "./workflow-release-rollback-policy.ts"
 import type { Workflow, WorkflowJob } from "./workflow-schema.ts"
 import { stepSignature } from "./workflow-security-policy.ts"
 
@@ -9,6 +10,7 @@ const DOWNLOAD_ARTIFACT = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e
 const DEPLOY_PAGES = "actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128"
 const ATTEST = "actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373"
 const WRITE_CONDITION = "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
+const BUILD_CONDITION = "github.event_name == 'push' || inputs.operation == 'dry-run'"
 const GITHUB_TOKEN_EXPRESSION = `\${{ github.token }}`
 const RELEASE_TAG_EXPRESSION = `\${{ needs.build.outputs.tag }}`
 const RELEASE_REPOSITORY_EXPRESSION = `\${{ needs.build.outputs.repository }}`
@@ -117,10 +119,23 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
     push: { tags: ["v*.*.*"] },
     workflow_dispatch: {
       inputs: {
+        operation: {
+          description: "Operation",
+          required: true,
+          default: "dry-run",
+          type: "choice",
+          options: ["dry-run", "rollback"],
+        },
         version: {
           description: "Package version to validate without publishing",
           required: true,
           default: "0.0.0",
+          type: "string",
+        },
+        target_version: {
+          description: "Existing version to restore on Pages",
+          required: false,
+          default: "",
           type: "string",
         },
       },
@@ -131,7 +146,8 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
     JSON.stringify(workflow.on) === trigger &&
     workflow.concurrency?.group === "release" &&
     workflow.concurrency["cancel-in-progress"] === false &&
-    Object.keys(workflow.jobs).toSorted().join(",") === "attest,build,deploy,release" &&
+    Object.keys(workflow.jobs).toSorted().join(",") ===
+      "attest,build,deploy,release,rollback-build,rollback-deploy" &&
     build?.["runs-on"] === "ubuntu-latest" &&
     build["timeout-minutes"] === 25 &&
     JSON.stringify(build.env) ===
@@ -143,7 +159,7 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
         repository: COORDINATE_REPOSITORY_EXPRESSION,
         sha256: PREPARE_SHA_EXPRESSION,
       }) &&
-    build.if === undefined &&
+    build.if === BUILD_CONDITION &&
     build.needs === undefined &&
     build.permissions === undefined &&
     build.environment === undefined &&
@@ -177,6 +193,7 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
     JSON.stringify(attest.permissions) ===
       JSON.stringify({ contents: "read", "id-token": "write", attestations: "write" }) &&
     attest.environment === undefined &&
-    stepsMatch(attest, ATTEST_STEPS)
+    stepsMatch(attest, ATTEST_STEPS) &&
+    validateRollbackWorkflow(workflow)
   return exact ? [] : ["RELEASE_SEMANTICS_EXACT"]
 }

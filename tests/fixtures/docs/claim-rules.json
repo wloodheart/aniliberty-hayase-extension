@@ -1,0 +1,44 @@
+[
+  {
+    "code": "AFFILIATION_CLAIM",
+    "phrases": [
+      "official aniliberty extension",
+      "official extension",
+      "official integration",
+      "official project",
+      "official source",
+      "affiliated by aniliberty",
+      "affiliated by hayase",
+      "endorsed by aniliberty",
+      "endorsed by hayase"
+    ]
+  },
+  {
+    "code": "ACCURACY_CLAIM",
+    "phrases": [
+      "high accuracy",
+      "perfect accuracy",
+      "guaranteed accuracy",
+      "exact accuracy",
+      "superior precision"
+    ]
+  },
+  {
+    "code": "HLS_CLAIM",
+    "phrases": [
+      "supports hls",
+      "support hls",
+      "provides hls",
+      "includes hls",
+      "hls support is available",
+      "hls playback is available"
+    ]
+  },
+  {
+    "code": "INACCESSIBLE_SECURITY_FALLBACK",
+    "phrases": [
+      "open a private github security advisory draft",
+      "create a private github security advisory draft"
+    ]
+  }
+]

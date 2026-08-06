@@ -7,7 +7,7 @@ own [original neutral icon](assets/aniliberty-neutral.svg), stored at
 
 ## Status and scope
 
-The extension is torrent-only and focused on Russian-dub media. It performs conservative, title-based matching with
+This unofficial Hayase torrent source is torrent-only and focused on Russian-dub media. It performs conservative, title-based matching with
 declared `medium` accuracy. Matching uses normalized titles, season markers, media type, year, episode count, and
 episode ranges when those fields are available. AniLiberty doesn't provide an AniList ID mapping through the consumed
 API, so users should review the title, size, and torrent metadata before downloading.
@@ -35,14 +35,17 @@ In Hayase:
 
 The manifest is the supported import target. Don't paste a source file, a branch URL, or arbitrary JavaScript into
 Hayase. Hayase reads the manifest and selects the immutable
-`vMAJOR.MINOR.PATCH/aniliberty.mjs` code URL and its SHA-256 checksum.
+`vMAJOR.MINOR.PATCH/aniliberty.mjs` code URL. The pinned Hayase does not enforce the SHA-256 field before loading that
+code. The digest is enforced by repository tooling and the compatibility harness, and is available for
+manual verification against the checksum and provenance assets.
 
 ## Updates and trust
 
 Hayase checks the stable manifest for later versions when it starts. The update channel can change which immutable code
 version Hayase loads, so treat repository ownership and release publication as part of the trust boundary. Verify that a
 release's manifest digest, checksum file, provenance, and GitHub attestation refer to the same bundle before importing or
-updating it.
+updating it. This repository tooling verifies those relationships; pinned Hayase itself doesn't perform that digest
+check.
 
 ## Behavior
 
@@ -72,15 +75,16 @@ isn't guaranteed.
 The extension connects only to the AniLiberty API origin `https://aniliberty.top` through these v1 endpoints:
 
 * `https://aniliberty.top/api/v1/app/status` checks service health.
-* `https://aniliberty.top/api/v1/app/search/releases?query=` receives up to three selected, normalized title candidates
-  as the `query` value.
+* `https://aniliberty.top/api/v1/app/search/releases?query=` receives up to three selected, trimmed original Hayase
+  titles as the `query` value. Their original case and punctuation are preserved when sent.
 * `https://aniliberty.top/api/v1/anime/torrents/release/{releaseId}` receives the numeric AniLiberty release ID selected
   from search metadata.
 
 AniLiberty and network intermediaries can observe normal request metadata, including IP address and the title query or
 release identifier sent to those endpoints. Search requests use the fetch function injected by Hayase so its CORS and
 network policy remains in control. The health check uses the worker's global fetch because Hayase's `test()` contract
-doesn't provide an injected fetch.
+doesn't provide an injected fetch. Normalized forms are used locally only for matching and duplicate suppression; they
+don't replace the trimmed original titles sent to AniLiberty.
 
 The extension has no telemetry, analytics, response-body logging, query logging, or persistent query cache. Successful
 unfiltered discovery records live only in worker memory for 60 seconds, with at most 64 entries. Failed requests aren't

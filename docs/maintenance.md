@@ -88,7 +88,7 @@ complete Pages tree. Publication contains one stable `index.json` plus one direc
 `aniliberty.mjs.sha256`, and `provenance.json`.
 
 The builder validates all coordinates before staging, holds an exclusive local publication lock, and swaps the complete
-site tree. CI verifies the bundle digest against the manifest, checksum, and provenance. A GitHub build attestation is
+site tree. Repository tooling and the compatibility harness verify the bundle digest against the manifest, checksum, and provenance. Pinned Hayase loads the manifest's code URL without enforcing that digest. A GitHub build attestation is
 created before an asset-bearing GitHub Release, and Pages activation happens only after that release succeeds. Existing
 version directories and GitHub Releases fail closed rather than being overwritten.
 
@@ -99,27 +99,36 @@ raw source, or moving bundle URL.
 
 ## Rollback
 
-Rollback changes the stable pointer, not immutable history:
+Rollback is an implemented protected `workflow_dispatch` operation that changes only the stable manifest selection:
 
-1. Stop new release publication and identify the last verified semantic version.
-2. Download that version's `aniliberty.mjs`, `aniliberty.mjs.sha256`, and `provenance.json` from its retained GitHub
-   Release. Verify the checksum and provenance repository, version, Hayase pin, and artifact path.
-3. Restore the previous complete Pages tree from a retained deployment artifact, or reconstruct the complete tree from
-   all retained GitHub Release assets. Keep every immutable version directory.
-4. Restore the root `index.json` from the prior verified deployment. If reconstruction is required, repoint only its
-   `version`, immutable `code` URL, and `sha256` to that verified prior version while preserving the stable `update` URL
-   and the rest of the manifest contract.
-5. Deploy that complete Pages tree through the protected GitHub Pages environment under the global
-   `release` serialization group. Don't rerun generation for an existing version and don't overwrite any immutable asset
-   or GitHub Release.
-6. Fetch the stable manifest, confirm it selects the prior `vMAJOR.MINOR.PATCH/aniliberty.mjs`, verify the downloaded
-   checksum, and retain GitHub Release assets, provenance, attestation, failed-run evidence, and the newer immutable
-   version for audit.
+1. In GitHub Actions, open the **Release** workflow on `main` and select **Run workflow**.
+2. Select operation `rollback` and enter the existing semantic version in `target_version` without a leading `v`. The
+   ordinary dry-run `version` input is ignored in rollback mode.
+3. The read-only `rollback-build` job validates the dispatch and repository metadata, restores every complete immutable
+   version from retained GitHub Release assets, and requires the target version to exist.
+4. The job verifies every bundle, checksum, provenance record, repository coordinate, Hayase pin, and artifact path. It
+   then generates only root `index.json` with the complete strict manifest pointing to the target's existing immutable
+   code URL and digest. No target bundle is rebuilt and no version directory is changed.
+5. The separate `rollback-deploy` job can run only for the rollback operation. It has only `pages: write` and
+   `id-token: write`, uses the protected `github-pages` environment, and deploys the verified complete Pages artifact.
+6. Confirm the stable manifest selects the requested `vMAJOR.MINOR.PATCH/aniliberty.mjs`. Retain every GitHub Release,
+   immutable version, checksum, provenance record, attestation, and workflow record for audit.
 
-If a local atomic swap fails before commit, the builder restores `.release-site.backup`. If backup restoration also
-fails, preserve the reported backup path and recover it to `.release-site` before running another build. If publication
-committed but backup cleanup failed, keep the active site and remove the stale backup only after verifying the active
-tree.
+Rollback doesn't create or update a GitHub Release, upload immutable assets, attest new bytes, reuse a tag, or overwrite
+history. Release, rollback, and dry-run operations all wait in the static global `release` concurrency queue with
+cancellation disabled.
+
+Maintainers can exercise the same preparation locally against a complete directory of retained release assets. This is
+a no-write dry-run: it reconstructs `.release-site`, verifies all history, and changes only `index.json`.
+
+```sh local
+export GITHUB_EVENT_NAME=workflow_dispatch
+export GITHUB_REF=refs/heads/main
+export GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
+export ROLLBACK_TARGET_VERSION="$ROLLBACK_TARGET_VERSION"
+export RELEASE_HISTORY_FIXTURE="$RELEASE_HISTORY_FIXTURE"
+bun run release:workflow rollback-prepare
+```
 
 ## Routine verification
 

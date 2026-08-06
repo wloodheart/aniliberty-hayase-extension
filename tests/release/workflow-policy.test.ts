@@ -6,9 +6,11 @@ import { join } from "node:path"
 import { z } from "zod"
 
 const directories: string[] = []
+const validatorScript = join(import.meta.dir, "../../scripts/validate-workflows.ts")
 const concurrencySchema = z.object({
   concurrency: z.object({ group: z.string(), "cancel-in-progress": z.boolean() }),
 })
+const jobsSchema = z.object({ jobs: z.record(z.string(), z.unknown()) })
 
 type ValidationRun = {
   readonly exitCode: number
@@ -16,8 +18,9 @@ type ValidationRun = {
   readonly stdout: string
 }
 
-async function validate(path: string): Promise<ValidationRun> {
-  const process = Bun.spawn(["bun", "run", "scripts/validate-workflows.ts", path], {
+async function validate(path: string, cwd = process.cwd()): Promise<ValidationRun> {
+  const process = Bun.spawn(["bun", "run", validatorScript, path], {
+    cwd,
     stderr: "pipe",
     stdout: "pipe",
   })
@@ -27,6 +30,25 @@ async function validate(path: string): Promise<ValidationRun> {
     new Response(process.stdout).text(),
   ])
   return { exitCode, stderr, stdout }
+}
+
+function mutatedRollbackQualityPackage(replacement: string): string {
+  const directory = mkdtempSync(join(tmpdir(), "aniliberty-rollback-package-policy-"))
+  directories.push(directory)
+  const workflowDirectory = join(directory, ".github", "workflows")
+  mkdirSync(workflowDirectory, { recursive: true })
+  writeFileSync(
+    join(directory, "package.json"),
+    readFileSync("package.json", "utf8").replace(
+      /"check:rollback":\s*"[^"]+"/u,
+      `"check:rollback": "${replacement}"`,
+    ),
+  )
+  writeFileSync(
+    join(workflowDirectory, "release.yml"),
+    readFileSync(".github/workflows/release.yml", "utf8"),
+  )
+  return directory
 }
 
 function mutatedRelease(search: string, replacement: string): string {
@@ -129,8 +151,104 @@ test("keeps every write-capable job explicitly unavailable to manual dry-run", (
   const serialized = JSON.stringify(workflow)
 
   // Then: no workflow_dispatch path can satisfy a write-capable job
-  expect(serialized.match(/github\.event_name == 'push'/g)).toHaveLength(3)
+  expect(
+    serialized.match(/github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/v'\)/g),
+  ).toHaveLength(3)
   expect(serialized).not.toContain("github.event_name != 'workflow_dispatch'")
+})
+
+test("defines explicit dry-run and rollback dispatch inputs", () => {
+  // Given: the parsed protected release workflow
+  const workflow = Bun.YAML.parse(readFileSync(".github/workflows/release.yml", "utf8"))
+
+  // When: manual operation inputs are inspected structurally
+  const serialized = JSON.stringify(workflow)
+
+  // Then: rollback is an explicit choice with an independent target version
+  expect(serialized).toContain(
+    '"operation":{"description":"Operation","required":true,"default":"dry-run","type":"choice","options":["dry-run","rollback"]}',
+  )
+  expect(serialized).toContain(
+    '"target_version":{"description":"Existing version to restore on Pages","required":false,"default":"","type":"string"}',
+  )
+})
+
+test("separates read-only rollback preparation from protected Pages deployment", () => {
+  // Given: the parsed protected release workflow
+  const workflow = Bun.YAML.parse(readFileSync(".github/workflows/release.yml", "utf8"))
+
+  // When: rollback job structure is serialized
+  const serialized = JSON.stringify(workflow)
+
+  // Then: only the protected deploy job has rollback write permissions
+  expect(serialized).toContain(
+    '"rollback-build":{"if":"github.event_name == \'workflow_dispatch\' && inputs.operation == \'rollback\'"',
+  )
+  expect(serialized).toContain(
+    '"rollback-deploy":{"needs":"rollback-build","if":"github.event_name == \'workflow_dispatch\' && inputs.operation == \'rollback\'"',
+  )
+  expect(serialized).toContain('"rollback-deploy":{"needs":"rollback-build"')
+  expect(serialized).toContain('"permissions":{"pages":"write","id-token":"write"}')
+  expect(serialized).toContain('"environment":{"name":"github-pages"')
+  expect(serialized).toContain("bun run release:workflow rollback-prepare")
+  expect(serialized).toContain("bun run check:rollback")
+})
+
+test.each([
+  "bun run check",
+  "bun run build",
+  "bun run verify:bundle",
+  "bun run check:rollback && bun run build",
+  "bun run rollback:alias",
+] as const)("rejects rollback quality command replacement %s", async (replacement) => {
+  // Given: a rollback workflow whose dedicated quality command is replaced
+  const path = mutatedRelease("bun run check:rollback", replacement)
+
+  // When: exact workflow policy validates the mutation
+  const result = await validate(path)
+
+  // Then: no direct, chained, or aliased build-capable gate is eligible
+  expect(result.exitCode).toBe(1)
+  expect(result.stderr).toContain("RELEASE_SEMANTICS_EXACT")
+})
+
+test.each([
+  "bun run check",
+  "bun run build",
+  "bun run verify:bundle",
+  "bun run lint && bun run build",
+] as const)("rejects transitive rollback package gate %s", async (replacement) => {
+  // Given: the exact workflow with a build-capable package-script replacement
+  const directory = mutatedRollbackQualityPackage(replacement)
+
+  // When: workflow validation resolves the package command graph
+  const result = await validate(".github/workflows/release.yml", directory)
+
+  // Then: package indirection cannot hide production bundle construction
+  expect(result.exitCode).toBe(1)
+  expect(result.stderr).toContain("ROLLBACK_QUALITY_SCRIPT_EXACT")
+})
+
+test("keeps rollback free of release creation and attestation", () => {
+  // Given: the parsed protected release workflow
+  const workflow = Bun.YAML.parse(readFileSync(".github/workflows/release.yml", "utf8"))
+
+  // When: rollback jobs are selected
+  const record = jobsSchema.parse(workflow)
+  const rollback = JSON.stringify({
+    build: record.jobs["rollback-build"],
+    deploy: record.jobs["rollback-deploy"],
+  })
+
+  // Then: rollback only reconstructs, verifies, uploads, and deploys Pages
+  expect(record.jobs["rollback-build"]).toBeDefined()
+  expect(record.jobs["rollback-deploy"]).toBeDefined()
+  expect(rollback).not.toContain("gh release create")
+  expect(rollback).not.toContain("attest-build-provenance")
+  expect(rollback).not.toContain("bun run build")
+  expect(rollback).not.toContain('bun run check"')
+  expect(rollback).not.toContain("bun run verify:bundle")
+  expect(rollback).not.toContain("release-payload")
 })
 
 test("serializes distinct release tags and manual dry-runs in one global group", () => {

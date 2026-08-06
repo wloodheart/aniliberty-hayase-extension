@@ -18,6 +18,7 @@
     "contract:aniliberty": "bun run scripts/check-aniliberty-contract.ts",
     "check:contracts": "bun run contract:hayase -- --fixture tests/fixtures/hayase/types-56151c7.d.ts && bun run contract:aniliberty -- --fixture tests/fixtures/aniliberty/openapi-consumed.json",
     "check:workflows": "bun run scripts/validate-workflows.ts .github/workflows/ci.yml .github/workflows/contract-drift.yml .github/workflows/release.yml",
+    "check:rollback": "bun run lint && bun run typecheck && bun run check:size && bun run check:workflows && bun run check:contracts && bun test tests/release/rollback.test.ts tests/release/workflow-cli.test.ts tests/release/workflow-policy.test.ts tests/release/history-review.test.ts tests/release/integrity-review.test.ts",
     "verify:bundle": "bun run scripts/verify-bundle.ts",
     "release:dry-run": "bun run scripts/build-release.ts",
     "release:workflow": "bun run scripts/release-workflow.ts",
