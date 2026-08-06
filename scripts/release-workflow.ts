@@ -7,6 +7,7 @@ import { parseGitHubRepository } from "../src/release/model.ts"
 import { buildRelease } from "./build-release.ts"
 import { restoreReleaseHistory } from "./release-history.ts"
 import { verifyReleasePayloadDirectory, verifyReleaseSite } from "./release-integrity.ts"
+import { parseUniqueJson } from "./strict-json.ts"
 
 const strictVersionSchema = z.string().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/)
 const packageSchema = z.object({ version: strictVersionSchema })
@@ -43,7 +44,7 @@ export function parseReleaseCoordinates(input: ReleaseCoordinateInput): ReleaseC
   const eventName = eventSchema.parse(input.eventName)
   const repository = parseGitHubRepository(input.repository).slug
   const packageMetadata = packageSchema.parse(
-    JSON.parse(readFileSync(join(input.workspace, "package.json"), "utf8")),
+    parseUniqueJson(readFileSync(join(input.workspace, "package.json"), "utf8")),
   )
   const tag =
     eventName === "push" ? input.ref.replace(/^refs\/tags\//, "") : `v${input.dryRunVersion}`

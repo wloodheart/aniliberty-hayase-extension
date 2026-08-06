@@ -125,6 +125,7 @@ export function validateWorkflow(
       JSON.stringify(workflow.on) ===
         JSON.stringify({ pull_request: null, push: { branches: ["main"] } }) &&
       workflow.concurrency?.group === `quality-\${{ github.workflow }}-\${{ github.ref }}` &&
+      workflow.concurrency["cancel-in-progress"] === true &&
       Object.keys(workflow.jobs).length === 1 &&
       quality !== undefined &&
       matchesJob(quality, 15, CI_STEPS)
@@ -137,6 +138,7 @@ export function validateWorkflow(
       JSON.stringify(workflow.on) ===
         JSON.stringify({ schedule: [{ cron: "17 4 * * 1" }], workflow_dispatch: null }) &&
       workflow.concurrency?.group === "contract-drift" &&
+      workflow.concurrency["cancel-in-progress"] === true &&
       Object.keys(workflow.jobs).length === 1 &&
       drift !== undefined &&
       matchesJob(drift, 20, DRIFT_STEPS)

@@ -79,14 +79,12 @@ test("restores an existing version fixture without contacting GitHub", async () 
   const fixture = join(workspace, "history-fixture")
   mkdirSync(join(fixture, "v1.2.3"), { recursive: true })
 
-  // When: restore and prepare run through the real CLI boundary
+  // When: restore runs through the real CLI boundary
   const restore = await run(workspace, "restore", { RELEASE_HISTORY_FIXTURE: fixture })
-  const prepare = await run(workspace, "prepare")
 
-  // Then: restoration succeeds offline and publication refuses replacement
-  expect(restore.exitCode).toBe(0)
-  expect(prepare.exitCode).toBe(1)
-  expect(prepare.stderr).toContain("already exists")
+  // Then: restoration itself refuses the current release coordinate
+  expect(restore.exitCode).toBe(1)
+  expect(restore.stderr).toContain("already exists")
 })
 
 test("rejects a mismatched manual version before creating output", async () => {

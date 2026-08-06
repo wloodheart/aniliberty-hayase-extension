@@ -78,22 +78,13 @@ const RELEASE_STEPS = [
   },
   { name: "Verify downloaded release payload", run: "bun run release:workflow verify-payload" },
   {
-    name: "Create release if absent",
+    name: "Publish complete immutable GitHub Release",
     env: {
       GH_TOKEN: GITHUB_TOKEN_EXPRESSION,
       RELEASE_TAG: RELEASE_TAG_EXPRESSION,
       RELEASE_REPOSITORY: RELEASE_REPOSITORY_EXPRESSION,
     },
-    run: `gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --generate-notes`,
-  },
-  {
-    name: "Upload exact versioned release assets",
-    env: {
-      GH_TOKEN: GITHUB_TOKEN_EXPRESSION,
-      RELEASE_TAG: RELEASE_TAG_EXPRESSION,
-      RELEASE_REPOSITORY: RELEASE_REPOSITORY_EXPRESSION,
-    },
-    run: `gh release upload "$RELEASE_TAG" release-payload/aniliberty.mjs release-payload/aniliberty.mjs.sha256 release-payload/provenance.json --repo "$RELEASE_REPOSITORY" --clobber`,
+    run: `gh release create "$RELEASE_TAG" release-payload/aniliberty.mjs release-payload/aniliberty.mjs.sha256 release-payload/provenance.json --repo "$RELEASE_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --generate-notes`,
   },
 ].map(stepSignature)
 
@@ -139,6 +130,7 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
     workflow.name === "Release" &&
     JSON.stringify(workflow.on) === trigger &&
     workflow.concurrency?.group === `release-\${{ github.ref }}` &&
+    workflow.concurrency["cancel-in-progress"] === false &&
     Object.keys(workflow.jobs).toSorted().join(",") === "attest,build,deploy,release" &&
     build?.["runs-on"] === "ubuntu-latest" &&
     build["timeout-minutes"] === 25 &&
@@ -157,7 +149,7 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
     build.environment === undefined &&
     stepsMatch(build, BUILD_STEPS) &&
     deploy?.if === WRITE_CONDITION &&
-    deploy.needs === "build" &&
+    deploy.needs === "release" &&
     deploy["runs-on"] === "ubuntu-latest" &&
     deploy["timeout-minutes"] === 10 &&
     deploy.env === undefined &&
@@ -168,7 +160,7 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
       JSON.stringify({ name: "github-pages", url: PAGE_URL_EXPRESSION }) &&
     stepsMatch(deploy, DEPLOY_STEPS) &&
     release?.if === WRITE_CONDITION &&
-    release.needs === "build" &&
+    JSON.stringify(release.needs) === JSON.stringify(["build", "attest"]) &&
     release["runs-on"] === "ubuntu-latest" &&
     release["timeout-minutes"] === 10 &&
     release.env === undefined &&

@@ -15,8 +15,7 @@ const APPROVED_COMMANDS = new Set([
   "bun run contract:aniliberty 2> drift-evidence/aniliberty.json",
   "bun run live:smoke 2> drift-evidence/live-smoke.txt",
   "exit 1",
-  `gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --generate-notes`,
-  `gh release upload "$RELEASE_TAG" release-payload/aniliberty.mjs release-payload/aniliberty.mjs.sha256 release-payload/provenance.json --repo "$RELEASE_REPOSITORY" --clobber`,
+  `gh release create "$RELEASE_TAG" release-payload/aniliberty.mjs release-payload/aniliberty.mjs.sha256 release-payload/provenance.json --repo "$RELEASE_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --generate-notes`,
 ])
 
 const ACTION_INPUTS: Readonly<Record<string, readonly string[]>> = {

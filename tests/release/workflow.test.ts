@@ -95,6 +95,51 @@ describe("release coordinates", () => {
     expect(parse).toThrow()
     expect(await Bun.file(join(workspace, ".release-site")).exists()).toBeFalse()
   })
+
+  test.each([
+    '{"version":"9.9.9","version":"1.2.3"}',
+    '{"version":"1.2.3","version":"9.9.9"}',
+    '{"name":"version: harmless","version":"1.2.3","ver\\u0073ion":"1.2.3"}',
+  ])("rejects duplicate package version keys before output mutation", async (packageJson) => {
+    // Given: package metadata with lexically duplicated version coordinates
+    const workspace = createWorkspace()
+    writeFileSync(join(workspace, "package.json"), packageJson)
+
+    // When: release coordinates parse the raw package boundary
+    const parse = (): unknown =>
+      parseReleaseCoordinates({
+        eventName: "push",
+        ref: "refs/tags/v1.2.3",
+        repository: "example/aniliberty",
+        workspace,
+      })
+
+    // Then: duplicate coordinates fail before release output exists
+    expect(parse).toThrow()
+    expect(await Bun.file(join(workspace, ".release-site")).exists()).toBeFalse()
+  })
+
+  test.each(["{", '{"version":"1.2.3-beta"}', '{"version":"1.2.3+build"}'])(
+    "rejects malformed or non-release package metadata before output mutation",
+    async (packageJson) => {
+      // Given: invalid raw package metadata
+      const workspace = createWorkspace()
+      writeFileSync(join(workspace, "package.json"), packageJson)
+
+      // When: release coordinates parse the package boundary
+      const parse = (): unknown =>
+        parseReleaseCoordinates({
+          eventName: "push",
+          ref: "refs/tags/v1.2.3",
+          repository: "example/aniliberty",
+          workspace,
+        })
+
+      // Then: validation fails without output mutation
+      expect(parse).toThrow()
+      expect(await Bun.file(join(workspace, ".release-site")).exists()).toBeFalse()
+    },
+  )
 })
 
 describe("publishable release payload", () => {

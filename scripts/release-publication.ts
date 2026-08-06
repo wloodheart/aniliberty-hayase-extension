@@ -74,30 +74,47 @@ export class ReleaseCommittedCleanupError extends Error {
   }
 }
 
+function acquireReleaseLock(workspace: string): {
+  readonly descriptor: number
+  readonly path: string
+} {
+  const path = join(workspace, ".release-site.lock")
+  try {
+    return { descriptor: openSync(path, "wx"), path }
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") {
+      throw new ReleaseLockedError(path)
+    }
+    throw error
+  }
+}
+
+function releaseLock(descriptor: number, path: string): void {
+  try {
+    closeSync(descriptor)
+  } finally {
+    rmSync(path, { force: true })
+  }
+}
+
 export async function withReleaseLock(
   workspace: string,
   operation: () => Promise<void>,
 ): Promise<void> {
-  const lockPath = join(workspace, ".release-site.lock")
-  let descriptor: number
-
-  try {
-    descriptor = openSync(lockPath, "wx")
-  } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "EEXIST") {
-      throw new ReleaseLockedError(lockPath)
-    }
-    throw error
-  }
-
+  const lock = acquireReleaseLock(workspace)
   try {
     await operation()
   } finally {
-    try {
-      closeSync(descriptor)
-    } finally {
-      rmSync(lockPath, { force: true })
-    }
+    releaseLock(lock.descriptor, lock.path)
+  }
+}
+
+export function withReleaseLockSync(workspace: string, operation: () => void): void {
+  const lock = acquireReleaseLock(workspace)
+  try {
+    operation()
+  } finally {
+    releaseLock(lock.descriptor, lock.path)
   }
 }
 

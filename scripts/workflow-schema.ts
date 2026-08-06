@@ -38,7 +38,7 @@ export const WorkflowSchema = z.strictObject({
   on: triggerSchema,
   permissions: permissionsSchema,
   concurrency: z
-    .strictObject({ group: z.string().min(1), "cancel-in-progress": z.literal(true) })
+    .strictObject({ group: z.string().min(1), "cancel-in-progress": z.boolean() })
     .optional(),
   jobs: z.record(z.string(), jobSchema),
 })

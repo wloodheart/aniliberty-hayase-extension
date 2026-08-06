@@ -73,6 +73,32 @@ test.each([
     replacement: "if: github.event_name == 'workflow_dispatch'",
     search: "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
   },
+  {
+    diagnostic: "RELEASE_SEMANTICS_EXACT",
+    replacement: "cancel-in-progress: true",
+    search: "cancel-in-progress: false",
+  },
+  {
+    diagnostic: "RELEASE_SEMANTICS_EXACT",
+    replacement: "attest:\n    needs: release",
+    search: "attest:\n    needs: build",
+  },
+  {
+    diagnostic: "RELEASE_SEMANTICS_EXACT",
+    replacement: "release:\n    needs: build",
+    search: "release:\n    needs:\n      - build\n      - attest",
+  },
+  {
+    diagnostic: "RELEASE_SEMANTICS_EXACT",
+    replacement: "deploy:\n    needs: build",
+    search: "deploy:\n    needs: release",
+  },
+  {
+    diagnostic: "RELEASE_SEMANTICS_EXACT",
+    replacement: 'gh release upload "$RELEASE_TAG" release-payload/aniliberty.mjs --clobber',
+    search:
+      'gh release create "$RELEASE_TAG" release-payload/aniliberty.mjs release-payload/aniliberty.mjs.sha256 release-payload/provenance.json --repo "$RELEASE_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --generate-notes',
+  },
 ] as const)("rejects a release policy mutation with $diagnostic", async (fixture) => {
   // Given: a protected release workflow carrying one security mutation
   const path = mutatedRelease(fixture.search, fixture.replacement)
@@ -95,4 +121,19 @@ test("keeps every write-capable job explicitly unavailable to manual dry-run", (
   // Then: no workflow_dispatch path can satisfy a write-capable job
   expect(serialized.match(/github\.event_name == 'push'/g)).toHaveLength(3)
   expect(serialized).not.toContain("github.event_name != 'workflow_dispatch'")
+})
+
+test("publishes one fail-on-existing Release only after attestation and before Pages", () => {
+  // Given: the parsed repository release workflow
+  const workflow = Bun.YAML.parse(readFileSync(".github/workflows/release.yml", "utf8"))
+
+  // When: publication commands and job dependencies are inspected
+  const serialized = JSON.stringify(workflow)
+
+  // Then: one atomic create is serialized between attestation and Pages activation
+  expect(serialized).toContain('"needs":["build","attest"]')
+  expect(serialized).toContain('"deploy":{"needs":"release"')
+  expect(serialized).not.toContain("release upload")
+  expect(serialized).not.toContain("release view")
+  expect(serialized).not.toContain("--clobber")
 })
