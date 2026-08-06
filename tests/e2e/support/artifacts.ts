@@ -13,6 +13,19 @@ export type ReleaseWorkspace = {
   readonly version: typeof RELEASE_VERSION
 }
 
+class ReleaseFixtureError extends Error {
+  readonly name = "ReleaseFixtureError"
+
+  constructor() {
+    super("Release provenance is malformed")
+    this.stack = `${this.name}: ${this.message}`
+  }
+}
+
+function provenanceRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
 async function runTask9Command(
   workspace: string,
   script: string,
@@ -61,10 +74,19 @@ export function replaceReleaseArtifact(workspace: ReleaseWorkspace, source: stri
   const versionDirectory = join(workspace.path, ".release-site", `v${workspace.version}`)
   const artifactPath = join(versionDirectory, "aniliberty.mjs")
   const manifestPath = join(workspace.path, ".release-site", "index.json")
+  const provenancePath = join(versionDirectory, "provenance.json")
   const sha256 = createHash("sha256").update(source).digest("hex")
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
+  let provenance: unknown
+  try {
+    provenance = JSON.parse(readFileSync(provenancePath, "utf8"))
+  } catch {
+    throw new ReleaseFixtureError()
+  }
+  if (!provenanceRecord(provenance)) throw new ReleaseFixtureError()
   manifest[0] = { ...manifest[0], sha256 }
   writeFileSync(artifactPath, source)
   writeFileSync(join(versionDirectory, "aniliberty.mjs.sha256"), `${sha256}  aniliberty.mjs\n`)
   writeFileSync(manifestPath, JSON.stringify(manifest))
+  writeFileSync(provenancePath, `${JSON.stringify({ ...provenance, sha256 }, null, 2)}\n`)
 }

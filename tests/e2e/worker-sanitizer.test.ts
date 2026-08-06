@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { createHash } from "node:crypto"
+import { readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 
 import {
   createReleaseWorkspace,
@@ -42,6 +45,68 @@ async function fixtureHarness(sourceBody: string): Promise<HayaseWorkerHarness> 
 }
 
 describe("pinned Hayase Worker sanitizer conformance", () => {
+  test("keeps every crafted release hash location consistent before Worker import", async () => {
+    // Given: an actual Task 9 release and its original provenance fields
+    workspace = await createReleaseWorkspace()
+    const versionDirectory = join(workspace.path, ".release-site", `v${workspace.version}`)
+    const provenancePath = join(versionDirectory, "provenance.json")
+    const originalProvenance = JSON.parse(readFileSync(provenancePath, "utf8"))
+    replaceReleaseArtifact(
+      workspace,
+      "export default {test:async()=>true,single:async()=>[],batch:async()=>[],movie:async()=>[]}",
+    )
+
+    // When: bundle bytes and all three release metadata locations are read independently
+    const bundle = readFileSync(join(versionDirectory, "aniliberty.mjs"))
+    const bundleHash = createHash("sha256").update(bundle).digest("hex")
+    const manifest = JSON.parse(
+      readFileSync(join(workspace.path, ".release-site", "index.json"), "utf8"),
+    )
+    const checksumHash = readFileSync(
+      join(versionDirectory, "aniliberty.mjs.sha256"),
+      "utf8",
+    ).split(" ")[0]
+    const provenanceText = readFileSync(provenancePath, "utf8")
+    const provenance = JSON.parse(provenanceText)
+
+    // Then: hashes agree, unrelated provenance survives, and formatting matches Task 9 before import
+    expect([manifest[0].sha256, checksumHash, provenance.sha256]).toEqual([
+      bundleHash,
+      bundleHash,
+      bundleHash,
+    ])
+    expect(provenanceText).toBe(
+      `${JSON.stringify({ ...originalProvenance, sha256: bundleHash }, null, 2)}\n`,
+    )
+    await using harness = await HayaseWorkerHarness.create(
+      workspace,
+      new URL("http://127.0.0.1:1/api/v1/"),
+    )
+    expect(await harness.call("test")).toBeTrue()
+  })
+
+  test("rejects malformed provenance before replacing artifact bytes", async () => {
+    // Given: a Task 9 release whose provenance boundary is not an object
+    workspace = await createReleaseWorkspace()
+    const versionDirectory = join(workspace.path, ".release-site", `v${workspace.version}`)
+    const artifactPath = join(versionDirectory, "aniliberty.mjs")
+    const originalArtifact = readFileSync(artifactPath)
+    writeFileSync(join(versionDirectory, "provenance.json"), "[]\n")
+
+    // When: the crafted artifact helper validates provenance before publication
+    let error: Error | undefined
+    try {
+      replaceReleaseArtifact(workspace, "private artifact source")
+    } catch (caught) {
+      if (caught instanceof Error) error = caught
+    }
+
+    // Then: diagnostic context is fixed and bundle bytes remain untouched
+    expect(error?.message).toBe("Release provenance is malformed")
+    expect(error?.stack).toBe("ReleaseFixtureError: Release provenance is malformed")
+    expect(readFileSync(artifactPath)).toEqual(originalArtifact)
+  })
+
   test("sanitizes mixed malformed results field by field and drops invalid entries", async () => {
     // Given: a generated fixture artifact returning one malformed result beside valid entries
     await using harness = await fixtureHarness(`
