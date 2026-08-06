@@ -1,0 +1,5 @@
+name: Malformed
+on: [pull_request
+jobs:
+  quality:
+    runs-on: ubuntu-latest

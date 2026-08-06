@@ -1,0 +1,13 @@
+name: Mutable action
+on: pull_request
+permissions:
+  contents: read
+concurrency:
+  group: fixture-mutable-action
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4 # v4.2.2

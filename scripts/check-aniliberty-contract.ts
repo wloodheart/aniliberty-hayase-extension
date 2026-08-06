@@ -5,9 +5,15 @@ import { z } from "zod"
 import { normalizeAniLibertyContract } from "./aniliberty-contract.ts"
 
 const defaultContractPath = "contracts/aniliberty-v1.contract.json"
+const upstreamUrl = "https://anilibria.top/storage/api/docs/v1?aniliberty-api-v1-docs.json"
+const maximumSourceBytes = 8 * 1024 * 1024
 
 class ContractInputError extends Error {
   readonly name = "ContractInputError"
+}
+
+class ContractNetworkError extends Error {
+  readonly name = "ContractNetworkError"
 }
 
 function option(args: readonly string[], name: string): string | undefined {
@@ -15,18 +21,55 @@ function option(args: readonly string[], name: string): string | undefined {
   return index === -1 ? undefined : args[index + 1]
 }
 
-function main(): void {
+async function fetchContract(): Promise<unknown> {
+  const response = await fetch(upstreamUrl, {
+    redirect: "error",
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!response.ok || response.body === null) {
+    await response.body?.cancel()
+    throw new ContractNetworkError(
+      `AniLiberty contract request failed with status ${response.status}`,
+    )
+  }
+  if (!response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+    await response.body.cancel()
+    throw new ContractNetworkError("AniLiberty contract response is not JSON")
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let byteCount = 0
+  let source = ""
+  while (true) {
+    const chunk = await reader.read()
+    if (chunk.done) break
+    byteCount += chunk.value.byteLength
+    if (byteCount > maximumSourceBytes) {
+      await reader.cancel()
+      throw new ContractNetworkError(`AniLiberty contract exceeds ${maximumSourceBytes} bytes`)
+    }
+    source += decoder.decode(chunk.value, { stream: true })
+  }
+  return JSON.parse(source + decoder.decode())
+}
+
+async function main(): Promise<void> {
   const args = Bun.argv.slice(2).filter((argument) => argument !== "--")
   const fixturePath = option(args, "--fixture")
   const contractPath = option(args, "--contract") ?? defaultContractPath
-  const expectedLength = contractPath === defaultContractPath ? 2 : 4
-  if (fixturePath === undefined || args.length !== expectedLength) {
+  const expectedLength =
+    fixturePath === undefined ? 0 : contractPath === defaultContractPath ? 2 : 4
+  if (args.length !== expectedLength) {
     throw new ContractInputError(
-      "Usage: check-aniliberty-contract.ts --fixture <path> [--contract <path>]",
+      "Usage: check-aniliberty-contract.ts [--fixture <path> [--contract <path>]]",
     )
   }
 
-  const actual = normalizeAniLibertyContract(JSON.parse(readFileSync(fixturePath, "utf8")))
+  const actual = normalizeAniLibertyContract(
+    fixturePath === undefined
+      ? await fetchContract()
+      : JSON.parse(readFileSync(fixturePath, "utf8")),
+  )
   const expected = readFileSync(contractPath, "utf8")
   if (actual !== expected) {
     console.error(JSON.stringify({ compatible: false, path: "$", source: "contract" }))
@@ -37,7 +80,7 @@ function main(): void {
 }
 
 try {
-  main()
+  await main()
 } catch (error) {
   if (error instanceof z.ZodError) {
     console.error(
@@ -48,8 +91,29 @@ try {
       }),
     )
     process.exitCode = 1
-  } else if (error instanceof ContractInputError || error instanceof SyntaxError) {
+  } else if (error instanceof ContractInputError || error instanceof ContractNetworkError) {
     console.error(JSON.stringify({ compatible: false, message: error.message, source: error.name }))
+    process.exitCode = 1
+  } else if (error instanceof SyntaxError) {
+    console.error(
+      JSON.stringify({
+        compatible: false,
+        message: "AniLiberty contract is not valid JSON",
+        source: error.name,
+      }),
+    )
+    process.exitCode = 1
+  } else if (
+    error instanceof TypeError ||
+    (error instanceof DOMException && ["AbortError", "TimeoutError"].includes(error.name))
+  ) {
+    console.error(
+      JSON.stringify({
+        compatible: false,
+        message: "AniLiberty contract request failed",
+        source: "ContractNetworkError",
+      }),
+    )
     process.exitCode = 1
   } else {
     throw error

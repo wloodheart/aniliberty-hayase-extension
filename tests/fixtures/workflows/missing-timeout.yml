@@ -1,0 +1,12 @@
+name: Missing timeout
+on: pull_request
+permissions:
+  contents: read
+concurrency:
+  group: fixture-missing-timeout
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bun run check

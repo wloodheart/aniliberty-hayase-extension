@@ -1,0 +1,10 @@
+name: Missing concurrency
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: bun run check

@@ -1,0 +1,15 @@
+name: Unsafe interpolation
+on: pull_request
+permissions:
+  contents: read
+concurrency:
+  group: fixture-unsafe-interpolation
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: echo "${{ github.event.pull_request.title }}"

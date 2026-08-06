@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "is_alive": "yes",
+    "available_api_endpoints": []
+  }
+}

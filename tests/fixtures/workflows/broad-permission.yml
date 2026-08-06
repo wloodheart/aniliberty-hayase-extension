@@ -1,0 +1,14 @@
+name: Broad permission
+on: pull_request
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: fixture-broad-permission
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: bun run check

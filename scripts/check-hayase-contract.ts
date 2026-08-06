@@ -12,7 +12,8 @@ import {
 import { compareHayaseContracts } from "./hayase-contract-model.ts"
 
 const upstreamSha = "56151c710a9265f42994bd72cff007598c596bab"
-const upstreamUrl = `https://raw.githubusercontent.com/hayase-app/interface/${upstreamSha}/src/lib/modules/extensions/types.d.ts`
+const upstreamUrl =
+  "https://raw.githubusercontent.com/hayase-app/interface/main/src/lib/modules/extensions/types.d.ts"
 const maximumSourceBytes = 256 * 1024
 const propertySchema = z.object({
   optional: z.boolean(),
@@ -34,8 +35,12 @@ class ContractNetworkError extends Error {
 }
 
 async function fetchSource(): Promise<string> {
-  const response = await fetch(upstreamUrl, { signal: AbortSignal.timeout(10_000) })
+  const response = await fetch(upstreamUrl, {
+    redirect: "error",
+    signal: AbortSignal.timeout(10_000),
+  })
   if (!response.ok || response.body === null) {
+    await response.body?.cancel()
     throw new ContractNetworkError(`Hayase source request failed with status ${response.status}`)
   }
   const reader = response.body.getReader()
@@ -105,6 +110,18 @@ try {
     process.exitCode = 1
   } else if (error instanceof ContractInputError || error instanceof ContractNetworkError) {
     console.error(JSON.stringify({ compatible: false, message: error.message, source: error.name }))
+    process.exitCode = 1
+  } else if (
+    error instanceof TypeError ||
+    (error instanceof DOMException && ["AbortError", "TimeoutError"].includes(error.name))
+  ) {
+    console.error(
+      JSON.stringify({
+        compatible: false,
+        message: "Hayase source request failed",
+        source: "ContractNetworkError",
+      }),
+    )
     process.exitCode = 1
   } else {
     throw error

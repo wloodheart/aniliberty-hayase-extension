@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "is_alive": true,
+    "available_api_endpoints": ["https://aniliberty.top"]
+  }
+}
