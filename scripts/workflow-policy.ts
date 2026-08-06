@@ -1,3 +1,5 @@
+import { posix } from "node:path"
+
 import type { Workflow, WorkflowJob, WorkflowPermissions, WorkflowStep } from "./workflow-schema.ts"
 
 const CHECKOUT = "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
@@ -20,8 +22,21 @@ const ACTION_INPUTS: Readonly<Record<string, readonly string[]>> = {
   "oven-sh/setup-bun": ["bun-version"],
 }
 
-function isPolicyPath(path: string, fileName: string): boolean {
-  return path === `.github/workflows/${fileName}` || path.endsWith(`/.github/workflows/${fileName}`)
+function normalizeWorkflowPath(path: string): string {
+  return posix.normalize(path.replaceAll("\\", "/"))
+}
+
+function isPolicyPath(normalizedPath: string, fileName: string): boolean {
+  return (
+    normalizedPath === `.github/workflows/${fileName}` ||
+    normalizedPath.endsWith(`/.github/workflows/${fileName}`)
+  )
+}
+
+function hasTrigger(trigger: Workflow["on"], name: string): boolean {
+  if (typeof trigger === "string") return trigger === name
+  if (Array.isArray(trigger)) return trigger.includes(name)
+  return Object.hasOwn(trigger, name)
 }
 
 function stepSignature(step: WorkflowStep): string {
@@ -30,6 +45,9 @@ function stepSignature(step: WorkflowStep): string {
     step.id ?? null,
     step.if ?? null,
     step["continue-on-error"] ?? null,
+    step.env ?? null,
+    step.shell ?? null,
+    step["working-directory"] ?? null,
     step.uses ?? null,
     step.run ?? null,
     step.with ?? null,
@@ -132,17 +150,26 @@ function validateJob(jobName: string, job: WorkflowJob, source: string): readonl
       diagnostics.push(`STEP_CONDITION_FORBIDDEN ${jobName}.steps[${index}]`)
     if (step["continue-on-error"] !== undefined)
       diagnostics.push(`STEP_CONTINUE_ON_ERROR_FORBIDDEN ${jobName}.steps[${index}]`)
-    if (step.env !== undefined) diagnostics.push(`STEP_ENV_FORBIDDEN ${jobName}.steps[${index}]`)
-    if (step.shell !== undefined)
-      diagnostics.push(`STEP_SHELL_FORBIDDEN ${jobName}.steps[${index}]`)
-    if (step["working-directory"] !== undefined)
-      diagnostics.push(`STEP_WORKING_DIRECTORY_FORBIDDEN ${jobName}.steps[${index}]`)
-    if (step.run !== undefined && !APPROVED_COMMANDS.has(step.run))
-      diagnostics.push(`RUN_COMMAND_FORBIDDEN ${jobName}.steps[${index}]`)
-    if (step.run?.includes("${{") === true)
-      diagnostics.push(`RUN_EXPRESSION_FORBIDDEN ${jobName}.steps[${index}]`)
+    diagnostics.push(...validateStepExecution(jobName, index, step))
     diagnostics.push(...validateAction(step, source))
   }
+  return diagnostics
+}
+
+function validateStepExecution(
+  jobName: string,
+  index: number,
+  step: WorkflowStep,
+): readonly string[] {
+  const diagnostics: string[] = []
+  if (step.env !== undefined) diagnostics.push(`STEP_ENV_FORBIDDEN ${jobName}.steps[${index}]`)
+  if (step.shell !== undefined) diagnostics.push(`STEP_SHELL_FORBIDDEN ${jobName}.steps[${index}]`)
+  if (step["working-directory"] !== undefined)
+    diagnostics.push(`STEP_WORKING_DIRECTORY_FORBIDDEN ${jobName}.steps[${index}]`)
+  if (step.run !== undefined && !APPROVED_COMMANDS.has(step.run))
+    diagnostics.push(`RUN_COMMAND_FORBIDDEN ${jobName}.steps[${index}]`)
+  if (step.run?.includes("${{") === true)
+    diagnostics.push(`RUN_EXPRESSION_FORBIDDEN ${jobName}.steps[${index}]`)
   return diagnostics
 }
 
@@ -163,14 +190,21 @@ export function validateWorkflow(
   workflow: Workflow,
 ): readonly string[] {
   const diagnostics = [...validatePermissions(workflow.permissions)]
+  const normalizedPath = normalizeWorkflowPath(path)
   if (workflow.concurrency === undefined) diagnostics.push("CONCURRENCY_REQUIRED")
   if (/\$\{\{\s*secrets\./.test(source)) diagnostics.push("SECRETS_FORBIDDEN")
-  const isDrift = isPolicyPath(path, "contract-drift.yml")
+  if (hasTrigger(workflow.on, "pull_request_target"))
+    diagnostics.push("TRIGGER_FORBIDDEN pull_request_target")
+  const isDrift = isPolicyPath(normalizedPath, "contract-drift.yml")
   for (const [jobName, job] of Object.entries(workflow.jobs)) {
     if (!isDrift) diagnostics.push(...validateJob(jobName, job, source))
-    else for (const step of job.steps) diagnostics.push(...validateAction(step, source))
+    else
+      for (const [index, step] of job.steps.entries()) {
+        diagnostics.push(...validateStepExecution(jobName, index, step))
+        diagnostics.push(...validateAction(step, source))
+      }
   }
-  if (isPolicyPath(path, "ci.yml")) {
+  if (isPolicyPath(normalizedPath, "ci.yml")) {
     const { quality } = workflow.jobs
     const exact =
       workflow.name === "Quality" &&
