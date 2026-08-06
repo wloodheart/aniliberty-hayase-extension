@@ -1,14 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs"
-import { tmpdir } from "node:os"
+import { existsSync, readdirSync, renameSync, rmSync } from "node:fs"
 import { join } from "node:path"
 
 import { buildRelease } from "../../scripts/build-release.ts"
@@ -17,14 +8,13 @@ import {
   ReleaseLockedError,
   ReleasePublicationError,
 } from "../../scripts/release-publication.ts"
+import { createReleaseWorkspace } from "../helpers/release-workspace.ts"
 
 const workspaces: string[] = []
 
 function createWorkspace(): string {
-  const workspace = mkdtempSync(join(tmpdir(), "aniliberty-publication-"))
+  const workspace = createReleaseWorkspace("aniliberty-publication-")
   workspaces.push(workspace)
-  mkdirSync(join(workspace, "src"))
-  writeFileSync(join(workspace, "src", "index.ts"), "export default Object.freeze({})\n")
   return workspace
 }
 

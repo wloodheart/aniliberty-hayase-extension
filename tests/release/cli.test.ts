@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { existsSync, rmSync } from "node:fs"
 import { join } from "node:path"
+
+import { createReleaseWorkspace } from "../helpers/release-workspace.ts"
 
 const workspaces: string[] = []
 const buildScript = join(import.meta.dir, "../../scripts/build-release.ts")
@@ -12,10 +13,8 @@ type CliResult = {
 }
 
 function createWorkspace(): string {
-  const workspace = mkdtempSync(join(tmpdir(), "aniliberty-release-cli-"))
+  const workspace = createReleaseWorkspace("aniliberty-release-cli-")
   workspaces.push(workspace)
-  mkdirSync(join(workspace, "src"))
-  writeFileSync(join(workspace, "src", "index.ts"), "export default Object.freeze({})\n")
   return workspace
 }
 

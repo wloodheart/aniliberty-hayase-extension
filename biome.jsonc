@@ -61,6 +61,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["tests/fixtures/bundle/*.mjs"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
     }
   ]
 }

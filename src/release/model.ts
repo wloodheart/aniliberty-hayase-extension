@@ -24,6 +24,11 @@ export type GitHubRepository = {
   readonly slug: string
 }
 
+export type ReleaseManifestArtifact = {
+  readonly icon: string
+  readonly sha256: string
+}
+
 export type ReleaseManifest = {
   readonly manifestVersion: 2
   readonly deprecated: false
@@ -35,6 +40,7 @@ export type ReleaseManifest = {
   readonly accuracy: "medium"
   readonly icon: string
   readonly media: "dub"
+  readonly sha256: string
   readonly url: "aHR0cHM6Ly9hbmlsaWJlcnR5LnRvcA=="
   readonly languages: "RU"[]
   readonly update: ReleaseUrl
@@ -105,6 +111,7 @@ export function parseReleaseUrl(value: string): ReleaseUrl {
 export function createReleaseManifest(
   version: ReleaseVersion,
   repository: GitHubRepository,
+  artifact: ReleaseManifestArtifact,
 ): ReleaseManifest {
   const pagesBase = `https://${repository.owner.toLowerCase()}.github.io/${encodeURIComponent(repository.name)}`
   const languages: "RU"[] = ["RU"]
@@ -118,8 +125,9 @@ export function createReleaseManifest(
     id: "aniliberty.torrents",
     type: "torrent",
     accuracy: "medium",
-    icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiMzNDNhNDAiLz48L3N2Zz4=",
+    icon: artifact.icon,
     media: "dub",
+    sha256: artifact.sha256,
     url: "aHR0cHM6Ly9hbmlsaWJlcnR5LnRvcA==",
     languages,
     update: parseReleaseUrl(`${pagesBase}/index.json`),

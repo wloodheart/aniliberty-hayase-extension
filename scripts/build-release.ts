@@ -23,6 +23,7 @@ import {
 } from "./release-publication.ts"
 
 const BUNDLE_NAME = "aniliberty.mjs"
+const ICON_NAME = "aniliberty-neutral.svg"
 const CONTRACT_SHA = "56151c710a9265f42994bd72cff007598c596bab"
 
 export type ReleaseBuildInput = {
@@ -49,11 +50,11 @@ export class ExistingReleaseError extends Error {
   }
 }
 
-export class ReleaseBuildError extends Error {
-  readonly name = "ReleaseBuildError"
+export class ReleaseArtifactError extends Error {
+  readonly name = "ReleaseArtifactError"
 
-  constructor(readonly diagnostics: readonly string[]) {
-    super(`Bundle generation failed: ${diagnostics.join(" | ")}`)
+  constructor(readonly artifact: "bundle" | "icon") {
+    super(`Required prebuilt release ${artifact} is unavailable`)
   }
 }
 
@@ -79,7 +80,6 @@ export async function buildRelease(
 ): Promise<void> {
   const version = parseReleaseVersion(input.version)
   const repository = parseGitHubRepository(input.repository)
-  const manifest = createReleaseManifest(version, repository)
   const siteDirectory = join(input.workspace, ".release-site")
   const backupDirectory = join(input.workspace, ".release-site.backup")
   const versionName = `v${version}`
@@ -104,30 +104,34 @@ export async function buildRelease(
 
       const stagedVersionDirectory = join(stagedSiteDirectory, versionName)
       mkdirSync(stagedVersionDirectory)
-      let build: Bun.BuildOutput
+      let bundle: Buffer
+      let iconSvg: Buffer
       try {
-        build = await Bun.build({
-          entrypoints: [join(input.workspace, "src", "index.ts")],
-          format: "esm",
-          minify: true,
-          naming: BUNDLE_NAME,
-          outdir: stagedVersionDirectory,
-          root: input.workspace,
-          target: "browser",
-        })
+        bundle = readFileSync(join(input.workspace, "dist", BUNDLE_NAME))
       } catch (error) {
         if (error instanceof Error) {
-          throw new ReleaseBuildError([error.message])
+          throw new ReleaseArtifactError("bundle")
+        }
+        throw error
+      }
+      try {
+        iconSvg = readFileSync(join(input.workspace, "assets", ICON_NAME))
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new ReleaseArtifactError("icon")
         }
         throw error
       }
 
-      if (!build.success) {
-        throw new ReleaseBuildError(build.logs.map((log) => log.message))
-      }
+      if (bundle.byteLength === 0) throw new ReleaseArtifactError("bundle")
+      if (iconSvg.byteLength === 0) throw new ReleaseArtifactError("icon")
 
-      const bundle = readFileSync(join(stagedVersionDirectory, BUNDLE_NAME))
+      writeFileSync(join(stagedVersionDirectory, BUNDLE_NAME), bundle)
       const sha256 = createHash("sha256").update(bundle).digest("hex")
+      const manifest = createReleaseManifest(version, repository, {
+        icon: `data:image/svg+xml;base64,${iconSvg.toString("base64")}`,
+        sha256,
+      })
       const provenance = Object.freeze({
         schemaVersion: 1,
         repository: repository.slug,

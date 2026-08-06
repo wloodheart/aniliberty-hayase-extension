@@ -12,6 +12,11 @@ import {
 } from "../../src/release/model.ts"
 import type { ExtensionConfig as PinnedExtensionConfig } from "../fixtures/hayase/types-56151c7.d.ts"
 
+const artifact = {
+  icon: "data:image/svg+xml;base64,PHN2Zy8+",
+  sha256: "0".repeat(64),
+}
+
 describe("release model boundaries", () => {
   test("creates the fixed manifest when version and repository are valid", () => {
     // Given: parsed release coordinates
@@ -19,7 +24,7 @@ describe("release model boundaries", () => {
     const repository = parseGitHubRepository("example/aniliberty")
 
     // When: the release manifest is created
-    const manifest = createReleaseManifest(version, repository)
+    const manifest = createReleaseManifest(version, repository, artifact)
 
     // Then: its machine-consumed identity and routing fields are exact
     expect(Object.keys(manifest).toSorted()).toEqual([
@@ -33,6 +38,7 @@ describe("release model boundaries", () => {
       "manifestVersion",
       "media",
       "name",
+      "sha256",
       "type",
       "update",
       "updatePeers",
@@ -48,6 +54,8 @@ describe("release model boundaries", () => {
     expect(manifest.type).toBe("torrent")
     expect(manifest.accuracy).toBe("medium")
     expect(manifest.media).toBe("dub")
+    expect(manifest.icon).toBe(artifact.icon)
+    expect(manifest.sha256).toBe(artifact.sha256)
     expect(manifest.url).toBe("aHR0cHM6Ly9hbmlsaWJlcnR5LnRvcA==")
     expect(manifest.languages).toEqual(["RU"])
     expect(String(manifest.update)).toBe("https://example.github.io/aniliberty/index.json")
@@ -71,6 +79,7 @@ describe("release model boundaries", () => {
     const manifest = createReleaseManifest(
       parseReleaseVersion("1.2.3"),
       parseGitHubRepository("example/aniliberty"),
+      artifact,
     )
 
     // When: it is assigned through both consumed Hayase contracts

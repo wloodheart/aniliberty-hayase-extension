@@ -15,16 +15,20 @@ import { join } from "node:path"
 import {
   buildRelease,
   ExistingReleaseError,
-  ReleaseBuildError,
+  ReleaseArtifactError,
 } from "../../scripts/build-release.ts"
 
 const workspaces: string[] = []
+const prebuiltBundle = Buffer.from("export default Object.freeze({ prebuilt: true })\n")
+const neutralIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>\n'
 
-function createWorkspace(source = "export default Object.freeze({})\n"): string {
+function createWorkspace(): string {
   const workspace = mkdtempSync(join(tmpdir(), "aniliberty-release-"))
   workspaces.push(workspace)
-  mkdirSync(join(workspace, "src"))
-  writeFileSync(join(workspace, "src", "index.ts"), source)
+  mkdirSync(join(workspace, "dist"))
+  mkdirSync(join(workspace, "assets"))
+  writeFileSync(join(workspace, "dist", "aniliberty.mjs"), prebuiltBundle)
+  writeFileSync(join(workspace, "assets", "aniliberty-neutral.svg"), neutralIcon)
   return workspace
 }
 
@@ -64,11 +68,14 @@ describe("atomic release builder", () => {
     expect(manifest).toEqual([
       expect.objectContaining({
         id: "aniliberty.torrents",
+        icon: `data:image/svg+xml;base64,${Buffer.from(neutralIcon).toString("base64")}`,
+        sha256: digest,
         update: "https://example.github.io/aniliberty/index.json",
         code: "https://example.github.io/aniliberty/v1.2.3/aniliberty.mjs",
         url: "aHR0cHM6Ly9hbmlsaWJlcnR5LnRvcA==",
       }),
     ])
+    expect(bundle).toEqual(prebuiltBundle)
     expect(readFileSync(join(versionDirectory, "aniliberty.mjs.sha256"), "utf8")).toBe(
       `${digest}  aniliberty.mjs\n`,
     )
@@ -134,15 +141,16 @@ describe("atomic release builder", () => {
     expect(existsSync(join(workspace, ".release-site", "index.json"))).toBeFalse()
   })
 
-  test("leaves no site or staging directory when bundling fails", async () => {
-    // Given: an isolated workspace with invalid TypeScript syntax
-    const workspace = createWorkspace("export default {\n")
+  test("leaves no site or staging directory when the prebuilt bundle is missing", async () => {
+    // Given: an isolated workspace without its required prebuilt bundle
+    const workspace = createWorkspace()
+    rmSync(join(workspace, "dist", "aniliberty.mjs"))
 
-    // When: release generation fails before publication
+    // When: release generation loads the prebuilt artifact
     const build = buildRelease({ repository: "example/aniliberty", version: "1.2.3", workspace })
 
     // Then: no partial output or temporary artifact remains
-    expect(await captureError(build)).toBeInstanceOf(ReleaseBuildError)
+    expect(await captureError(build)).toBeInstanceOf(ReleaseArtifactError)
     expect(existsSync(join(workspace, ".release-site"))).toBeFalse()
     expect(readdirSync(workspace).filter((entry) => entry.startsWith(".release-site."))).toEqual([])
   })
