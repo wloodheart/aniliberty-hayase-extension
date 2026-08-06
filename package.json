@@ -20,7 +20,7 @@
     "check:workflows": "bun run scripts/validate-workflows.ts .github/workflows/ci.yml .github/workflows/contract-drift.yml .github/workflows/release.yml",
     "check:rollback": "bun run lint && bun run typecheck && bun run check:size && bun run check:workflows && bun run check:contracts && bun test tests/release/rollback.test.ts tests/release/workflow-cli.test.ts tests/release/workflow-policy.test.ts tests/release/history-review.test.ts tests/release/integrity-review.test.ts",
     "verify:bundle": "bun run scripts/verify-bundle.ts",
-    "release:dry-run": "bun run scripts/build-release.ts",
+    "release:dry-run": "bun run build && bun run verify:bundle && bun run scripts/build-release.ts",
     "release:workflow": "bun run scripts/release-workflow.ts",
     "live:smoke": "bun run scripts/live-smoke.ts",
     "check": "bun run lint && bun run typecheck && bun test && bun run check:size && bun run check:workflows && bun run check:contracts && bun run build && bun run verify:bundle"
