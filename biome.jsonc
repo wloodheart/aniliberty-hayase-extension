@@ -9,6 +9,7 @@
       "!**/.release-site",
       "!**/coverage",
       "!**/dist",
+      "!**/release-payload",
       "!**/node_modules"
     ]
   },

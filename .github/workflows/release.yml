@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version to validate without publishing
+        required: true
+        default: "0.0.0"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RELEASE_DRY_RUN_VERSION: ${{ inputs.version }}
+    outputs:
+      version: ${{ steps.coordinates.outputs.version }}
+      tag: ${{ steps.coordinates.outputs.tag }}
+      repository: ${{ steps.coordinates.outputs.repository }}
+      sha256: ${{ steps.prepare.outputs.sha256 }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: 1.3.14
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Validate release coordinates
+        id: coordinates
+        run: bun run release:workflow validate
+      - name: Run deterministic quality gates
+        run: bun run check
+      - name: Build production bundle
+        run: bun run build
+      - name: Verify production bundle
+        run: bun run verify:bundle
+      - name: Restore immutable release history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run release:workflow restore
+      - name: Build and inspect atomic release site
+        id: prepare
+        run: bun run release:workflow prepare
+      - name: Upload immutable Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: .release-site
+          retention-days: 1
+      - name: Upload exact release payload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-payload
+          path: release-payload
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy immutable Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository policy
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: 1.3.14
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Download exact release payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-payload
+          path: release-payload
+      - name: Verify downloaded release payload
+        run: bun run release:workflow verify-payload
+      - name: Create release if absent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          RELEASE_REPOSITORY: ${{ needs.build.outputs.repository }}
+        run: gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --generate-notes
+      - name: Upload exact versioned release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          RELEASE_REPOSITORY: ${{ needs.build.outputs.repository }}
+        run: gh release upload "$RELEASE_TAG" release-payload/aniliberty.mjs release-payload/aniliberty.mjs.sha256 release-payload/provenance.json --repo "$RELEASE_REPOSITORY" --clobber
+
+  attest:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download exact release payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-payload
+          path: release-payload
+      - name: Verify bundle checksum
+        run: cd release-payload && sha256sum --check aniliberty.mjs.sha256
+      - name: Attest exact published bundle
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: release-payload/aniliberty.mjs

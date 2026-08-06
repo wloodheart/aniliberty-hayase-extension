@@ -2,7 +2,7 @@ import { z } from "zod"
 
 const scalarSchema = z.union([z.boolean(), z.number(), z.string()])
 const permissionSchema = z.enum(["none", "read", "write"])
-const permissionsSchema = z.object({ contents: permissionSchema }).catchall(permissionSchema)
+const permissionsSchema = z.record(z.string(), permissionSchema)
 
 const stepSchema = z.strictObject({
   name: z.string().optional(),
@@ -20,6 +20,11 @@ const stepSchema = z.strictObject({
 const jobSchema = z.strictObject({
   if: z.string().optional(),
   env: z.record(z.string(), scalarSchema).optional(),
+  needs: z.union([z.string(), z.array(z.string())]).optional(),
+  outputs: z.record(z.string(), z.string()).optional(),
+  environment: z
+    .union([z.string(), z.strictObject({ name: z.string(), url: z.string().optional() })])
+    .optional(),
   "runs-on": z.string(),
   "timeout-minutes": z.number().positive().optional(),
   permissions: permissionsSchema.optional(),
