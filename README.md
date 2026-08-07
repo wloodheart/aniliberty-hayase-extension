@@ -68,29 +68,30 @@ result. Hayase exclusions are applied case-insensitively to the torrent label, c
 color label, and quality. This is how unsupported codecs such as HEVC can be excluded.
 
 The matcher checks up to three distinct normalized Latin-script titles, recognized season suffixes, year, media type,
-episode count, block flags, and requested range. Equal top candidates are rejected. A missing match, an ambiguous match,
-blocked media, unproven episode coverage, or complete filtering returns the ordinary no-match result `[]`. Availability
-isn't guaranteed.
+episode count, block flags, and requested range. Trusted AniList `userPreferred`, `english`, and `romaji` titles may be
+retained transiently as aliases only for local candidate matching. Equal top candidates are rejected. A missing match,
+an ambiguous match, blocked media, unproven episode coverage, or complete filtering returns the ordinary no-match result
+`[]`. Availability isn't guaranteed.
 
 ## Privacy and security
 
 The extension connects only to the AniLiberty API origin `https://aniliberty.top` through these v1 endpoints:
 
 * `https://aniliberty.top/api/v1/app/status` checks service health.
-* `https://aniliberty.top/api/v1/app/search/releases?query=` receives up to three selected, trimmed original Hayase
-  titles as the `query` value. Their original case and punctuation are preserved when sent.
+* `https://aniliberty.top/api/v1/app/search/releases?query=` receives only selected, trimmed original Hayase titles from
+  `query.titles`, up to three, as the `query` value. Their original case and punctuation are preserved when sent.
 * `https://aniliberty.top/api/v1/anime/torrents/release/{releaseId}` receives the numeric AniLiberty release ID selected
   from search metadata.
 
 AniLiberty and network intermediaries can observe normal request metadata, including IP address and the title query or
 release identifier sent to those endpoints. Search requests use the fetch function injected by Hayase so its CORS and
 network policy remains in control. The health check uses the worker's global fetch because Hayase's `test()` contract
-doesn't provide an injected fetch. Normalized forms are used locally only for matching and duplicate suppression; they
-don't replace the trimmed original titles sent to AniLiberty.
+doesn't provide an injected fetch. Normalized forms and trusted AniList title aliases are used locally only for matching
+and duplicate suppression; they don't replace or join the selected `query.titles` sent to AniLiberty.
 
 The extension has no telemetry, analytics, response-body logging, query logging, or persistent query cache. Successful
-unfiltered discovery records live only in worker memory for 60 seconds, with at most 64 entries. Failed requests aren't
-retained.
+unfiltered discovery records, including local matching aliases, live only in worker memory for 60 seconds, with at most
+64 entries. Failed requests aren't retained.
 
 Installing any extension means trusting its manifest, code URL, publisher, and update channel. Review the release
 checksum and provenance before import. A checksum detects changed bytes but doesn't prove that code is safe. Hayase runs
