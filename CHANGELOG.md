@@ -4,6 +4,8 @@ All notable changes will be recorded here.
 
 ## Unreleased
 
+## 0.1.1 - 2026-08-07
+
 ### Fixed
 
 * Match AniLiberty candidates locally against trusted alternate AniList titles while keeping outbound search titles
