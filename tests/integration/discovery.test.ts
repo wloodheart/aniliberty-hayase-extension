@@ -118,6 +118,86 @@ test("deduplicates releases exactly by branded ID before matching", async () => 
   expect(client.torrentRequests).toBe(1)
 })
 
+test("separates cached winners for distinct local aliases with identical outbound titles", async () => {
+  // Given: one remote search title and two locally distinct aliases
+  const firstRelease = releaseWith(seasonOneRelease, {
+    name: { ...seasonOneRelease.name, english: "Local Alias One" },
+  })
+  const secondRelease = releaseWith(seasonTwoRelease, {
+    episodes_total: 12,
+    name: { ...seasonTwoRelease.name, english: "Local Alias Two" },
+  })
+  const searchedTitles: string[] = []
+  const fetchedReleaseIds: number[] = []
+  const client: DiscoveryClient = {
+    searchReleases: (title) => {
+      searchedTitles.push(title)
+      return Promise.resolve([firstRelease, secondRelease])
+    },
+    releaseTorrents: (releaseId) => {
+      fetchedReleaseIds.push(releaseId)
+      return Promise.resolve([seasonOneTorrent])
+    },
+  }
+  const service = new DiscoveryService(client, () => 0)
+  const titles = ["Hell Mode"] as const
+  const firstRequest = { ...baseDiscoveryRequest, titles, matchingTitles: ["Local Alias One"] }
+  const secondRequest = {
+    ...baseDiscoveryRequest,
+    titles,
+    matchingTitles: ["Local Alias Two"],
+  }
+
+  // When: the same remote query is discovered with each local alias
+  const firstResults = await service.discover(firstRequest)
+  const secondResults = await service.discover(secondRequest)
+
+  // Then: each alias owns a distinct cached winner and remote load
+  expect(searchedTitles).toEqual(["Hell Mode", "Hell Mode"])
+  expect(fetchedReleaseIds).toEqual([firstRelease.id, secondRelease.id])
+  expect(firstResults.map(({ release }) => release.id)).toEqual([firstRelease.id])
+  expect(secondResults.map(({ release }) => release.id)).toEqual([secondRelease.id])
+})
+
+test("coalesces concurrent identical discovery requests and caches the result", async () => {
+  // Given: identical requests held behind a deterministic search barrier
+  const searchStarted = Promise.withResolvers<void>()
+  const releaseSearch = Promise.withResolvers<void>()
+  let searches = 0
+  let torrentRequests = 0
+  const client: DiscoveryClient = {
+    searchReleases: async () => {
+      searches += 1
+      searchStarted.resolve()
+      await releaseSearch.promise
+      return [seasonOneRelease]
+    },
+    releaseTorrents: () => {
+      torrentRequests += 1
+      return Promise.resolve([seasonOneTorrent])
+    },
+  }
+  const service = new DiscoveryService(client, () => 0)
+  const request = { ...baseDiscoveryRequest }
+
+  // When: two equal requests overlap, followed by a completed-cache request
+  const concurrent = Promise.all([service.discover(request), service.discover({ ...request })])
+  await searchStarted.promise
+  expect(searches).toBe(1)
+  releaseSearch.resolve()
+  const concurrentResults = await concurrent
+  const cachedResults = await service.discover({ ...request })
+
+  // Then: all callers share the one unfiltered load and winner
+  expect(searches).toBe(1)
+  expect(torrentRequests).toBe(1)
+  expect(concurrentResults.map((results) => results.map(({ release }) => release.id))).toEqual([
+    [seasonOneRelease.id],
+    [seasonOneRelease.id],
+  ])
+  expect(cachedResults.map(({ release }) => release.id)).toEqual([seasonOneRelease.id])
+})
+
 const seasonCases = [
   ["season one", baseDiscoveryRequest, seasonOneRelease, seasonOneTorrent],
   [
