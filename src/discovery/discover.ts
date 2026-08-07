@@ -88,7 +88,7 @@ function matchingQuery(request: DiscoveryRequest): ReleaseMatchQuery {
     mode: request.mode === "movie" ? "movie" : "series",
     requestedEpisode: request.episode,
     startYear: request.startYear,
-    titles: request.titles,
+    titles: request.matchingTitles,
   }
 }
 
@@ -96,6 +96,7 @@ function cacheKey(request: DiscoveryRequest): string {
   return JSON.stringify([
     request.mediaId,
     request.titles,
+    request.matchingTitles,
     request.startYear,
     request.episodeCount,
     request.episode,

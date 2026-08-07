@@ -6,6 +6,7 @@ export type DiscoveryMode = "single" | "batch" | "movie"
 export type DiscoveryRequest = {
   readonly mediaId: number
   readonly titles: readonly string[]
+  readonly matchingTitles: readonly string[]
   readonly startYear: number | null
   readonly episodeCount: number | null
   readonly episode: number

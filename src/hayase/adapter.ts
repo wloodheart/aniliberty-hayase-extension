@@ -35,6 +35,9 @@ const AniListMediaSchema = z
     id: media.id,
     kind: media.format,
     startYear: media.startDate.year,
+    titleAliases: [media.title.userPreferred, media.title.english, media.title.romaji].filter(
+      (title): title is string => title !== null,
+    ),
   }))
 
 const mediaKindByMode = {
@@ -104,9 +107,11 @@ export class HayaseTorrentSource implements TorrentSource {
         return []
       }
       const media = parsed.data
+      const titles = query.titles
       const request: DiscoveryRequest = {
         mediaId: queryMediaId.data,
-        titles: query.titles,
+        titles,
+        matchingTitles: [...titles, ...media.titleAliases],
         startYear: media.startYear,
         episodeCount: query.episodeCount ?? media.episodeCount,
         episode: query.episode,

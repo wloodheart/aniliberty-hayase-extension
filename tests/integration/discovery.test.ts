@@ -125,6 +125,7 @@ const seasonCases = [
     {
       ...baseDiscoveryRequest,
       titles: ["Hell Mode 2nd Season"],
+      matchingTitles: ["Hell Mode 2nd Season"],
       episode: 5,
       episodeCount: null,
     },

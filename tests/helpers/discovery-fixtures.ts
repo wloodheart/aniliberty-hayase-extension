@@ -30,6 +30,7 @@ export const seasonTwoTorrent = firstFixture(TorrentListSchema.parse(seasonTwoTo
 export const baseDiscoveryRequest = {
   mediaId: 1,
   titles: ["Hell Mode"],
+  matchingTitles: ["Hell Mode"],
   startYear: 2026,
   episodeCount: 12,
   episode: 6,
