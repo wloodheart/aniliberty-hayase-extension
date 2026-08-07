@@ -129,7 +129,6 @@ export function validateReleaseWorkflow(workflow: Workflow): readonly string[] {
         version: {
           description: "Package version to validate without publishing",
           required: true,
-          default: "0.0.0",
           type: "string",
         },
         target_version: {

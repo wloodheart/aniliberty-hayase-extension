@@ -173,6 +173,19 @@ test("defines explicit dry-run and rollback dispatch inputs", () => {
   )
 })
 
+test("requires an explicit dry-run version instead of accepting a stale default", () => {
+  // Given: the parsed protected release workflow
+  const workflow = Bun.YAML.parse(readFileSync(".github/workflows/release.yml", "utf8"))
+
+  // When: the manual dry-run version input is inspected structurally
+  const serialized = JSON.stringify(workflow)
+
+  // Then: callers must provide the version that reaches coordinate validation
+  expect(serialized).toContain(
+    '"version":{"description":"Package version to validate without publishing","required":true,"type":"string"}',
+  )
+})
+
 test("separates read-only rollback preparation from protected Pages deployment", () => {
   // Given: the parsed protected release workflow
   const workflow = Bun.YAML.parse(readFileSync(".github/workflows/release.yml", "utf8"))
