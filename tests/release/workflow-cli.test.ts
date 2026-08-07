@@ -58,7 +58,7 @@ async function run(
 function processEnv(): Record<string, string> {
   return Object.fromEntries(
     Object.entries(process.env).filter(
-      (entry): entry is [string, string] => entry[1] !== undefined,
+      (entry): entry is [string, string] => entry[0] !== "GITHUB_OUTPUT" && entry[1] !== undefined,
     ),
   )
 }
