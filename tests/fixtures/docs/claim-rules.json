@@ -24,6 +24,24 @@
     ]
   },
   {
+    "code": "ANILIST_ID_MAPPING_CLAIM",
+    "phrases": [
+      "anilist id mapping is supported",
+      "maps anilist ids",
+      "matches by anilist id",
+      "uses anilist id mapping"
+    ]
+  },
+  {
+    "code": "OUTBOUND_ANILIST_ALIAS_CLAIM",
+    "phrases": [
+      "aniliberty receives anilist aliases",
+      "aniliberty receives romaji aliases",
+      "anilist aliases are sent to aniliberty",
+      "romaji aliases are sent to aniliberty"
+    ]
+  },
+  {
     "code": "HLS_CLAIM",
     "phrases": [
       "supports hls",

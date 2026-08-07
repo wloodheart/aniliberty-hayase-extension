@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { validateDocument } from "./docs-claim-rules.ts"
+import { claimViolations, validateDocument } from "./docs-claim-rules.ts"
 
 const root = join(import.meta.dir, "../..")
 
@@ -33,4 +33,11 @@ test.each([
 
   // Then: no other detector can hide or satisfy this violation
   expect(violations).toEqual([{ code, path }])
+})
+
+test.each([
+  ["AniList ID mapping is supported for candidate selection.", "ANILIST_ID_MAPPING_CLAIM"],
+  ["AniLiberty receives romaji aliases from AniList.", "OUTBOUND_ANILIST_ALIAS_CLAIM"],
+] as const)("rejects unsafe title-flow claim: %s", (claim, code) => {
+  expect(claimViolations(claim)).toEqual([code])
 })
