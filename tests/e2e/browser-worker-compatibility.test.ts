@@ -82,9 +82,10 @@ async function createBrowserFixture(): Promise<{
 
 beforeAll(async () => {
   workspace = await createReleaseWorkspace()
-  const { PLAYWRIGHT_CHROMIUM_EXECUTABLE: chromiumExecutable } = process.env
+  const { CHROME_BIN: hostedChromeExecutable, PLAYWRIGHT_CHROMIUM_EXECUTABLE: chromiumExecutable } =
+    process.env
   browser = await chromium.launch({
-    executablePath: chromiumExecutable ?? "/usr/bin/chromium",
+    executablePath: chromiumExecutable ?? hostedChromeExecutable ?? "/usr/bin/chromium",
     headless: true,
     args: ["--no-sandbox"],
   })
