@@ -88,7 +88,7 @@ beforeAll(async () => {
     headless: true,
     args: ["--no-sandbox"],
   })
-})
+}, 15_000)
 
 afterAll(async () => {
   await browser?.close()
