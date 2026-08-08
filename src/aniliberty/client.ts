@@ -12,8 +12,8 @@ export class AniLibertyClient {
   constructor(fetch: AniLibertyFetch) {
     this.internalClient = new InternalAniLibertyClient({
       baseUrl: PRODUCTION_BASE_URL,
-      fetch,
-      healthFetch: globalThis.fetch,
+      fetch: fetch.bind(globalThis),
+      healthFetch: globalThis.fetch.bind(globalThis),
       now: Date.now,
       scheduleDeadline,
       sleep,

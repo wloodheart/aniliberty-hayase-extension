@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 
+import { AniLibertyClient, type AniLibertyFetch } from "../../src/aniliberty/client.ts"
 import { InfoHashSchema } from "../../src/aniliberty/schemas.ts"
 import { HayaseTorrentSource } from "../../src/hayase/adapter.ts"
 import type { AnimeQueryWithFetch, InjectedFetch } from "../../src/hayase/types.ts"
@@ -92,6 +93,56 @@ class RoutingFetch {
 
 afterEach(() => {
   globalThis.fetch = originalFetch
+})
+
+test("binds the Worker-global health fetch receiver at the public client boundary", async () => {
+  // Given: a native-fetch stand-in that accepts only the Worker global receiver
+  let receivedUrl: URL | undefined
+  const receiverSensitiveHealthFetch: AniLibertyFetch = function (this: typeof globalThis, input) {
+    if (this !== globalThis) return Promise.reject(new TypeError("Invalid health fetch receiver"))
+    receivedUrl = new URL(input.toString())
+    return Promise.resolve(
+      Response.json({ is_alive: true, available_api_endpoints: [receivedUrl.toString()] }),
+    )
+  }
+  globalThis.fetch = Object.assign(receiverSensitiveHealthFetch, {
+    preconnect: originalFetch.preconnect,
+  })
+  const client = new AniLibertyClient(originalFetch)
+
+  // When: health is requested through the public client
+  const status = await client.health()
+
+  // Then: the response is parsed and the health endpoint receives the request
+  expect(status).toEqual({
+    is_alive: true,
+    available_api_endpoints: ["https://aniliberty.top/api/v1/app/status"],
+  })
+  expect(receivedUrl?.pathname).toBe("/api/v1/app/status")
+})
+
+test("binds the injected discovery fetch receiver at the public client boundary", async () => {
+  // Given: an injected fetch that accepts only the Worker global receiver
+  let receivedUrl: URL | undefined
+  const receiverSensitiveDiscoveryFetch: AniLibertyFetch = function (
+    this: typeof globalThis,
+    input,
+  ) {
+    if (this !== globalThis) {
+      return Promise.reject(new TypeError("Invalid discovery fetch receiver"))
+    }
+    receivedUrl = new URL(input.toString())
+    return Promise.resolve(Response.json([seasonOneRelease]))
+  }
+  const client = new AniLibertyClient(receiverSensitiveDiscoveryFetch)
+
+  // When: a release search is requested through the public client
+  const releases = await client.searchReleases("Receiver Query")
+
+  // Then: the response is parsed and the selected discovery query reaches the endpoint
+  expect(releases.map(({ id }) => id)).toEqual([seasonOneRelease.id])
+  expect(receivedUrl?.pathname).toBe("/api/v1/app/search/releases")
+  expect(receivedUrl?.searchParams.get("query")).toBe("Receiver Query")
 })
 
 test("routes single batch and movie through injected fetch while coalescing series work", async () => {
