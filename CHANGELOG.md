@@ -4,6 +4,12 @@ All notable changes will be recorded here.
 
 ## Unreleased
 
+## 0.1.2 - 2026-08-08
+
+### Fixed
+
+* Restore native Worker health compatibility by binding fetch receivers while preserving response validation.
+
 ## 0.1.1 - 2026-08-07
 
 ### Fixed
