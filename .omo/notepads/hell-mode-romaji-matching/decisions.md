@@ -56,3 +56,8 @@
 - Kept boundary equivalence local to `scoreTitleMatch()` instead of changing global normalization, search-title selection, aliases, cache identity, or outbound requests.
 - Assigned boundary-only equivalence score 80 and required four unchanged significant tokens plus equal effective seasons; exact and season-equivalent scores retain precedence.
 - Preserved equal-top ambiguity rather than using boundary evidence to choose between compact-equal candidates.
+
+## 2026-08-08T15:58:17+03:00 - Todo 13
+- Changed only release-owned package and changelog metadata; `bun.lock`, dependencies, source, tests, and workflows remain unchanged.
+- Kept a fresh empty `Unreleased` section above exact heading `0.1.3 - 2026-08-08` and described only the conservative romanized word-boundary fix.
+- The atomic release-preparation commit includes local evidence and append-only notepad records; hosted run identifiers will be appended after exact-SHA approval without altering the approved commit.

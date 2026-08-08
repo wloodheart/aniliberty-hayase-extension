@@ -4,6 +4,13 @@ All notable changes will be recorded here.
 
 ## Unreleased
 
+## 0.1.3 - 2026-08-08
+
+### Fixed
+
+* Match long romanized titles when word boundaries differ while preserving conservative collision and ambiguity
+  rejection.
+
 ## 0.1.2 - 2026-08-08
 
 ### Fixed

@@ -1,0 +1,45 @@
+Task 13 - v0.1.3 release preparation and dry-run approval
+Started: 2026-08-08T15:58:17+03:00
+
+PRECONDITIONS AND SCOPE
+- Starting HEAD: edee1bbf89e24e0e5f45946186c9ba571e9f3ac7 (Todo 12).
+- Branch: main, tracking origin/main, one local Todo 12 commit ahead before release preparation.
+- Tracked version search found release-owned current metadata only in package.json and CHANGELOG.md; bun.lock has no root workspace version field and remained unchanged.
+- Release workflow policy allows manual dry-run to execute the read-only build job. Attest, GitHub Release, and Pages deploy require a tag-push event.
+- Metadata diff: package.json version 0.1.3 and a fresh empty Unreleased section followed by exact heading 0.1.3 - 2026-08-08 with the romanized word-boundary fix.
+
+FOCUSED REGRESSIONS
+- Command: bun install --frozen-lockfile
+- Result: no dependency or lockfile changes.
+- Command: bun test --max-concurrency 1 tests/unit/release-matcher.test.ts tests/integration/hell-mode-s2-regression.test.ts
+- Result: 37 passed, 0 failed, 44 expectations.
+- Command: bun test --max-concurrency 1 tests/e2e/hell-mode-s2-worker.test.ts tests/e2e/worker-failures.test.ts tests/e2e/hayase-worker.test.ts
+- Result: 10 passed, 0 failed, 46 expectations against generated Worker artifacts.
+- Command: CHROME_BIN=/usr/bin/chromium bun test --max-concurrency 1 tests/e2e/browser-worker-compatibility.test.ts
+- Result: 2 passed, 0 failed, 4 expectations in real Chromium.
+
+LOCAL REPOSITORY GATES
+- Command: CHROME_BIN=/usr/bin/chromium bun run check
+- Result: exit 0; Biome checked 156 files; strict typecheck passed; 440 tests passed with 0 failures and 992 expectations; size, workflow, offline contracts, bundle build, and verification passed.
+- Command: CHROME_BIN=/usr/bin/chromium bun run check:rollback
+- Result: exit 0; 71 release/rollback tests passed with 0 failures and 169 expectations; lint, strict types, size, workflow, and contracts passed.
+- Exactly one complete bun run check was executed for this task.
+
+LOCAL RELEASE DRY-RUN AND INTEGRITY
+- Command: bun run release:dry-run -- --version "0.1.3" --repository "wloodheart/aniliberty-hayase-extension"
+- Result: exit 0 after production build, bundle verification, and release-site construction.
+- SHA-256: 48aee26de9436f081a3238b6b7a3a74df94a06b1a67c91f653299cf32e6ba6ee.
+- The dist bundle and immutable release-site bundle were byte-identical.
+- Manifest version/code path/digest, checksum file, and provenance repository/version/artifact/digest all agreed on v0.1.3.
+- Generated dist, release site, backup, lock, stage, and payload outputs were removed before staging.
+
+PRE-PUBLICATION SAFETY BASELINE
+- Public v0.1.2 bundle SHA-256 before preparation: 0ea9d7bdf57a5a2bb792c3035d475856ae567b8ab837a7225337722ffdcc336d.
+- No local or remote v0.1.3 tag existed.
+- No v0.1.3 GitHub Release existed.
+- The v0.1.3 immutable Pages bundle path returned HTTP 404.
+- No tag, release, asset upload, deployment, or public immutable path was created.
+- The protected user-owned untracked directory was not read, modified, copied, staged, or removed.
+
+HOSTED APPROVALS
+- Pending creation and normal push of the atomic release-preparation commit.

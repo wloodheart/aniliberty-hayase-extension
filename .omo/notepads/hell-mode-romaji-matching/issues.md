@@ -52,3 +52,8 @@
 - No diagnostic fallback was needed: LSP and IDE inspections were clean for both permanent changed TypeScript files.
 - The protected untracked `.log/` remained untouched and excluded from inspection, cleanup, and staging.
 - The exact fixed-response runtime QA used a temporary E2E file only for execution and deleted it immediately after the green run.
+
+## 2026-08-08T15:58:17+03:00 - Todo 13
+- JetBrains reports its existing package-manager schema warning for `bun@1.3.14`; repository Biome, strict typecheck, frozen install, and release gates all accept the pinned Bun contract.
+- The first manual checksum command ran from the repository root and could not resolve the checksum's relative bundle path; rerunning `sha256sum --check` inside the immutable version directory passed.
+- The protected user-owned untracked directory remained off-limits and excluded from cleanup and staging.

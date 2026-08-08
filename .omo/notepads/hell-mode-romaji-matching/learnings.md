@@ -57,3 +57,8 @@
 - Equal compacted season-base text is safe as an 80-point boundary signal only with equal effective seasons and at least four unchanged significant tokens; this accepts long romanized context while rejecting `Superman`/`Super Man` and `AB`/`A B`.
 - The generated installed-style Worker replay now returns two eligible fixed results for episode 3 with empty exclusions and exactly one AVC result when HEVC is explicitly excluded.
 - The score branch composes before unchanged 0.9 containment, so exact 100, season-equivalent 90, and broad containment behavior remain independently covered.
+
+## 2026-08-08T15:58:17+03:00 - Todo 13
+- The v0.1.3 local release artifact is deterministic at `48aee26de9436f081a3238b6b7a3a74df94a06b1a67c91f653299cf32e6ba6ee` across the bundle, manifest, checksum, and provenance.
+- Serialized focused gates passed with 37 matcher/integration tests, 10 generated Worker tests, and two real-Chromium compatibility tests before the single complete repository check.
+- Public v0.1.2 remained `0ea9d7bdf57a5a2bb792c3035d475856ae567b8ab837a7225337722ffdcc336d` before the hosted approval phase.
