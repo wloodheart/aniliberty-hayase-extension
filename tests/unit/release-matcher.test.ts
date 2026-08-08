@@ -58,7 +58,13 @@ test.each([
     "alpha bravo charlie delta echo foxtrot golf hotel",
   ],
   ["alpha x", "alpha y"],
+  ["Superman", "Super Man"],
+  ["AB", "A B"],
   ["Hell Mode S2", "Hell Mode S3"],
+  [
+    "alpha bravo charlie delta echo foxtrot golf hotel superman S2",
+    "alpha bravo charlie delta echo foxtrot golf hotel super man S3",
+  ],
 ] as const)("rejects title similarity below the safe boundary", (queryTitle, candidateTitle) => {
   // Given: a misleading title pair below a documented requirement
   // When: title similarity is scored
@@ -108,6 +114,18 @@ test("matches an exact comma-separated alternative alias", () => {
   expect(result).toEqual({ kind: "match", candidate, score: 100 })
 })
 
+test("rejects a short compact collision found only in alternative titles", () => {
+  // Given: an unrelated release whose alternative differs only by a short word boundary
+  const query = { ...baseQuery, titles: ["Superman"] } satisfies ReleaseMatchQuery
+  const candidate = release(1, "Unrelated English Name", { alternativeTitles: "Super Man" })
+
+  // When: the release is matched through all candidate title forms
+  const result = matchRelease(query, [candidate])
+
+  // Then: compact equality without substantial context is not title evidence
+  expect(result).toEqual({ kind: "none", reason: "no_eligible_candidate" })
+})
+
 test("selects Hell Mode season two for an explicit second-season query", () => {
   // Given: both reduced Hell Mode seasons
   const seasonTwo = release(10239, "Hell Mode Season 2", { startYear: 2026 })
@@ -123,6 +141,28 @@ test("selects Hell Mode season two for an explicit second-season query", () => {
 
   // Then: the season-equivalent second release wins
   expect(result).toEqual({ kind: "match", candidate: seasonTwo, score: 90 })
+})
+
+test("matches the Hayase Hell Mode title when AniLiberty splits a romanized compound", () => {
+  // Given: the reduced episode-three query and otherwise eligible live release metadata
+  const candidate = release(
+    10239,
+    "Hell Mode: Yarikomizuki no Gamer wa Hai Settei no Isekai de Musou suru 2nd Season",
+    { episodesTotal: null, isCompleted: false, startYear: 2026 },
+  )
+  const query = {
+    ...baseQuery,
+    titles: ["Hell Mode: Yarikomizuki no Gamer wa Haisettei no Isekai de Musou Suru 2nd Season"],
+    startYear: 2026,
+    episodeCount: 13,
+    requestedEpisode: 3,
+  } satisfies ReleaseMatchQuery
+
+  // When: release matching compares the joined and split romanization forms
+  const result = matchRelease(query, [candidate])
+
+  // Then: token spacing alone cannot discard the unique season-two release
+  expect(result).toEqual({ kind: "match", candidate, score: 80 })
 })
 
 test.each([
@@ -229,6 +269,24 @@ test("rejects unresolved equal top scores instead of using input order", () => {
   // Then: both orders return the same explicit ambiguity
   expect(forward).toEqual({ kind: "none", reason: "ambiguous" })
   expect(reverse).toEqual(forward)
+})
+
+test("rejects two compact-equal top candidates as ambiguous", () => {
+  // Given: two eligible releases with the same long boundary-only title score
+  const query = {
+    ...baseQuery,
+    titles: ["alpha bravo charlie delta echo foxtrot golf hotel superman"],
+  } satisfies ReleaseMatchQuery
+  const candidates = [
+    release(1, "alpha bravo charlie delta echo foxtrot golf hotel super man"),
+    release(2, "alpha bravo charlie delta echo foxtrot golf hotel super man"),
+  ]
+
+  // When: release matching evaluates both compact-equal candidates
+  const result = matchRelease(query, candidates)
+
+  // Then: boundary equivalence cannot break an equal top-score tie
+  expect(result).toEqual({ kind: "none", reason: "ambiguous" })
 })
 
 test("is pure across malformed and repeated calls", () => {

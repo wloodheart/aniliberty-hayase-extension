@@ -41,6 +41,8 @@ type MatchTitles = {
   readonly release: readonly string[]
 }
 
+const MIN_BOUNDARY_CONTEXT_TOKENS = 4
+
 function isPositiveInteger(value: number): boolean {
   return Number.isFinite(value) && Number.isSafeInteger(value) && value > 0
 }
@@ -67,6 +69,29 @@ function containmentScore(left: string, right: string): MatchScore | null {
   return overlap / Math.max(leftTokens.size, rightTokens.size) >= 0.9 ? 80 : null
 }
 
+function boundaryPlacementScore(left: string, right: string): MatchScore | null {
+  const leftTitle = parseSeasonTitle(left)
+  const rightTitle = parseSeasonTitle(right)
+  const leftSeason = leftTitle.kind === "season" ? leftTitle.ordinal : 1
+  const rightSeason = rightTitle.kind === "season" ? rightTitle.ordinal : 1
+
+  if (
+    leftSeason !== rightSeason ||
+    leftTitle.baseTitle.replaceAll(" ", "") !== rightTitle.baseTitle.replaceAll(" ", "")
+  ) {
+    return null
+  }
+
+  const rightTokens = significantTokens(rightTitle.baseTitle)
+  let unchangedTokens = 0
+
+  for (const token of significantTokens(leftTitle.baseTitle)) {
+    if (rightTokens.has(token)) unchangedTokens += 1
+  }
+
+  return unchangedTokens >= MIN_BOUNDARY_CONTEXT_TOKENS ? 80 : null
+}
+
 export function scoreTitleMatch(queryTitle: string, candidateTitle: string): MatchScore | null {
   const normalizedQuery = normalizeTitle(queryTitle)
   const normalizedCandidate = normalizeTitle(candidateTitle)
@@ -76,7 +101,10 @@ export function scoreTitleMatch(queryTitle: string, candidateTitle: string): Mat
   if (haveSeasonTitleConflict(queryTitle, candidateTitle)) return null
   if (areSeasonTitlesEquivalent(queryTitle, candidateTitle)) return 90
 
-  return containmentScore(queryTitle, candidateTitle)
+  return (
+    boundaryPlacementScore(queryTitle, candidateTitle) ??
+    containmentScore(queryTitle, candidateTitle)
+  )
 }
 
 function candidateTitles(candidate: ReleaseCandidate): readonly string[] {

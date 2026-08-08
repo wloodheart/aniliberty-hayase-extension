@@ -1,0 +1,41 @@
+Task 12 - conservative romanized word-boundary equivalence
+Started: 2026-08-08T15:43:54+03:00
+
+RED
+- Command: bun test tests/unit/release-matcher.test.ts
+- Existing unchanged regression failed with received { kind: "none", reason: "no_eligible_candidate" } instead of score 80.
+- After collision tests were added and before production edits: 34 passed, 2 failed. The unchanged positive regression and compact-equal ambiguity expectation were the only failures.
+
+DESIGN
+- Exact score 100, season-equivalent score 90, 0.9 containment, hard conflicts, and equal-top ambiguity remain in their existing order and behavior.
+- Boundary score 80 requires equal compacted normalized season bases, equal effective season ordinals, and at least four unchanged significant tokens.
+- Short direct and alternative-title collisions, season conflict, and unresolved compact-equal candidates are explicit regressions.
+
+TEMPORARY QA ARTIFACT
+- tests/e2e/task-12-runtime-qa.test.ts will exercise a freshly built installed-style artifact through HayaseWorkerHarness against only an ephemeral 127.0.0.1 fixed-response server.
+- Cleanup: delete the temporary test after recording its output; createReleaseWorkspace and withAniLibertyServer own workspace, Worker, and port teardown.
+
+GREEN AND FOCUSED GATES - 2026-08-08T15:45:18+03:00
+- Matcher: 36 passed, 0 failed; unchanged disclosed regression now matches at score 80.
+- Discovery/filter/adapter: 62 passed, 0 failed across seven focused files.
+- Worker: 19 passed, 0 failed across five installed-artifact files.
+- Browser Worker compatibility: 2 passed, 0 failed in real Chromium.
+- Biome changed-file check: clean. Repository strict typecheck: passed.
+- LSP diagnostics and IDE inspections: no diagnostics on both permanent changed TypeScript files.
+
+FIXED-RESPONSE RUNTIME QA - 2026-08-08T15:45:18+03:00
+- Command: bun test tests/e2e/task-12-runtime-qa.test.ts
+- Fresh createReleaseWorkspace artifact plus a fresh HayaseWorkerHarness per state; all requests observed only on an ephemeral 127.0.0.1 server.
+- Episode 3, count 13, resolution 1080, exclusions [] returned two eligible fixed results: one AVC and one HEVC.
+- The explicit exclusions ["HEVC"] control returned exactly the AVC result.
+- Result: 1 passed, 0 failed, 3 expectations.
+- Cleanup: temporary QA test deleted; harness disposed Workers, removed temporary release workspaces, and stopped ephemeral servers.
+
+FULL GATE, SCOPE, AND CLEANUP - 2026-08-08T15:47:07+03:00
+- Command: bun run check
+- Result: exit 0; Biome checked 156 files; strict no-excuse typecheck passed; 440 tests passed with 0 failures and 992 expectations; size, workflow security, offline contracts, bundle build, and bundle verification passed.
+- Size: production matcher is 178 pure source lines; the required matcher test is 216 pure source lines in the repository's non-blocking 200-250 warning band.
+- Permanent scope: src/matching/release-matcher.ts, tests/unit/release-matcher.test.ts, this evidence file, and append-only Todo 12 entries in learnings.md, decisions.md, and issues.md.
+- Production literal search found none of the disclosed title forms or release identifier under src/.
+- No normalization, threshold, cache, filter, schema, sanitization, outbound-title, dependency, version, release, workflow, or publication file changed.
+- The protected untracked .log/ directory was not read, modified, copied, staged, deleted, or included in any diff.
